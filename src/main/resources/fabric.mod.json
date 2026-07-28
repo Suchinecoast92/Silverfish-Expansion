@@ -3,13 +3,13 @@
 	"id": "silverfish-expansion",
 	"version": "${version}",
 	"name": "Silverfish Expansion",
-	"description": "Adds three animated silverfish variants: Araneo, Mantis, and Fly.",
+	"description": "Añade tres variantes animadas de silverfish: Araneo, Mantis y Fly.",
 	"authors": [
 		"MOISES"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/Suchinecoast92/Silverfish-Expansion",
+		"sources": "https://github.com/Suchinecoast92/Silverfish-Expansion"
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/silverfish-expansion/icon.png",
