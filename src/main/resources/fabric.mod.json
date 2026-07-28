@@ -1,0 +1,39 @@
+{
+	"schemaVersion": 1,
+	"id": "silverfish-expansion",
+	"version": "${version}",
+	"name": "Silverfish Expansion",
+	"description": "Adds three animated silverfish variants: Araneo, Mantis, and Fly.",
+	"authors": [
+		"MOISES"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/silverfish-expansion/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.silverfish_expansion.SilverfishExpansion"
+		],
+		"client": [
+			"com.silverfish_expansion.client.SilverfishExpansionClient"
+		]
+	},
+	"mixins": [
+		"silverfish-expansion.mixins.json",
+		{
+			"config": "silverfish-expansion.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.2",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*",
+		"geckolib": "*"
+	}
+}
