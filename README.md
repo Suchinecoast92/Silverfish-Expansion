@@ -1,8 +1,18 @@
 # Silverfish Expansion
 
-Mod de **Fabric** para Minecraft **1.21.11** que añade tres variantes animadas de silverfish con **GeckoLib**.
+Mod de **Fabric** para Minecraft **1.21.11** que añade variantes animadas de silverfish con **GeckoLib** y prepara un sistema de **colonia** con ciclo de vida completo.
 
-## Variantes
+## Estado actual
+
+| Contenido | Estado |
+|-----------|--------|
+| Adultos Araneo / Mantis / Fly | Completo (modelo, animaciones, comportamiento) |
+| Assets de larva | Añadidos (modelo + animaciones GeckoLib) |
+| Huevos amontonables | Pendiente (modelos en Blockbench) |
+| Piedra infestada de colonia | Pendiente |
+| Matriarca y cámara de cría | Pendiente |
+
+## Variantes adultas
 
 | Variante | ID de entidad | Modelo de origen |
 |----------|---------------|------------------|
@@ -10,9 +20,7 @@ Mod de **Fabric** para Minecraft **1.21.11** que añade tres variantes animadas 
 | Mantis Silverfish | `mantis_silverfish` | `silverfish2-mantis.bbmodel` |
 | Fly Silverfish | `fly_silverfish` | `silverfish2-fly.bbmodel` |
 
-## Animaciones
-
-Todas las variantes usan GeckoLib y comparten un comportamiento natural de movimiento:
+### Animaciones de adultos
 
 | Animación | Quién la usa | Cuándo se reproduce |
 |-----------|--------------|---------------------|
@@ -25,20 +33,49 @@ Todas las variantes usan GeckoLib y comparten un comportamiento natural de movim
 
 Al parar de caminar suelen quedarse en `none`. Aproximadamente un 35 % de las veces ejecutan un idle breve y luego regresan a la pose neutra.
 
-## Comportamiento del Fly Silverfish
+### Comportamiento del Fly Silverfish
 
-El tipo volador tiene un ciclo completo de vuelo:
+1. **Despegue** — espera a que arranque `startFlying` y sube despacio.
+2. **Vuelo libre** — movimiento errático a baja altura.
+3. **Aproximación** — descenso suave.
+4. **Aterrizaje** — `stopFlying` cerca del suelo, sin daño por caída.
 
-1. **Despegue** — espera un momento a que arranque `startFlying` y luego sube despacio.
-2. **Vuelo libre** — se mueve de forma errática a baja altura (estilo abeja).
-3. **Aproximación** — desciende suave hacia el suelo.
-4. **Aterrizaje** — reproduce `stopFlying` cerca del suelo, sin daño por caída.
+## Sistema de colonia (en desarrollo)
 
-Prefiere volar antes que caminar mucho por el suelo.
+La colonia debe sentirse como un hábitat natural de cuevas, no como un dungeon ni un jefe.
+
+Ciclo de vida previsto:
+
+**Huevos → Larvas → Piedra infestada → Adultos → Matriarca → Nuevos huevos**
+
+### Piezas del ecosistema
+
+| Pieza | Rol |
+|-------|-----|
+| **Cámara de cría** | Estructura natural en cuevas profundas (sin cofres ni loot artificial) |
+| **Huevos** | Bloques gelatinosos amontonables (1–4 por bloque, como pepinos de mar / velas), en suelo, paredes y techo |
+| **Larvas** | Fase juvenil: no atacan, huyen y buscan piedra para refugiarse |
+| **Piedra infestada** | Refugio de maduración; al romperla sale un adulto |
+| **Matriarca** | Única que pone huevos; alarma a los adultos si recibe daño |
+| **Decadencia** | Sin Matriarca no hay nuevos huevos; lo existente sigue su ciclo hasta agotarse |
+
+Los adultos actuales no cambian su comportamiento individual; la colonia se construye encima de ellos.
+
+### Assets de larva
+
+Ya están en el proyecto (pendientes de cablear del todo en código si hace falta):
+
+- `geckolib/models/entity/larva.geo.json`
+- `geckolib/animations/entity/larva.animation.json`
+- Fuente Blockbench: `larva.bbmodel`
+
+### Próximo paso: huevos
+
+Se modelarán en Blockbench como bloque Java amontonable (`eggs=1..4`), con varios modelos según cantidad, y luego se integrarán al mod.
 
 ## En el juego
 
-- Huevos de aparición en la pestaña creativa **Huevos de generación** / **Spawn Eggs**.
+- Huevos de aparición de adultos en la pestaña creativa **Huevos de generación** / **Spawn Eggs**.
 - Dependencias en tiempo de ejecución: **Fabric API** y **GeckoLib**.
 - Idiomas incluidos: inglés (`en_us`) y español México (`es_mx`).
 
@@ -54,13 +91,19 @@ Prefiere volar antes que caminar mucho por el suelo.
 
 ## Reexportar modelos
 
-Si editas los archivos de Blockbench en `silverfish-textures and models/bbmodel/`, exporta con el plugin **GeckoLib**:
+### Entidades (GeckoLib)
 
-1. **File → Export → Export GeckoLib Model** → `src/main/resources/assets/silverfish-expansion/geckolib/models/entity/{id}.geo.json`
-2. **File → Export → Export GeckoLib Animations** → `src/main/resources/assets/silverfish-expansion/geckolib/animations/entity/{id}.animation.json`
-3. Clic derecho en la textura → **Save As** → `src/main/resources/assets/silverfish-expansion/textures/entity/{id}.png`
+Si editas los `.bbmodel` de entidades, exporta con el plugin **GeckoLib**:
 
-Usa como `{id}`: `araneo_silverfish`, `mantis_silverfish` o `fly_silverfish`.
+1. **File → Export → Export GeckoLib Model** → `geckolib/models/entity/{id}.geo.json`
+2. **File → Export → Export GeckoLib Animations** → `geckolib/animations/entity/{id}.animation.json`
+3. Textura → `textures/entity/{id}.png`
+
+IDs: `araneo_silverfish`, `mantis_silverfish`, `fly_silverfish`, `larva`.
+
+### Huevos (bloque Java)
+
+Los huevos se exportan como **Java Block/Item** (no GeckoLib): modelos `block/silverfish_eggs_1` … `_4` y blockstate con propiedad `eggs`.
 
 ## Compilar
 
