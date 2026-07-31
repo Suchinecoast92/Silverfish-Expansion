@@ -1,0 +1,33 @@
+{
+	"variants": {
+		"eggs=1,facing=up": { "model": "silverfish-expansion:block/silverfish_eggs_1" },
+		"eggs=2,facing=up": { "model": "silverfish-expansion:block/silverfish_eggs_2" },
+		"eggs=3,facing=up": { "model": "silverfish-expansion:block/silverfish_eggs_3" },
+		"eggs=4,facing=up": { "model": "silverfish-expansion:block/silverfish_eggs_4" },
+
+		"eggs=1,facing=down": { "model": "silverfish-expansion:block/silverfish_eggs_1", "x": 180 },
+		"eggs=2,facing=down": { "model": "silverfish-expansion:block/silverfish_eggs_2", "x": 180 },
+		"eggs=3,facing=down": { "model": "silverfish-expansion:block/silverfish_eggs_3", "x": 180 },
+		"eggs=4,facing=down": { "model": "silverfish-expansion:block/silverfish_eggs_4", "x": 180 },
+
+		"eggs=1,facing=north": { "model": "silverfish-expansion:block/silverfish_eggs_1", "x": 90 },
+		"eggs=2,facing=north": { "model": "silverfish-expansion:block/silverfish_eggs_2", "x": 90 },
+		"eggs=3,facing=north": { "model": "silverfish-expansion:block/silverfish_eggs_3", "x": 90 },
+		"eggs=4,facing=north": { "model": "silverfish-expansion:block/silverfish_eggs_4", "x": 90 },
+
+		"eggs=1,facing=south": { "model": "silverfish-expansion:block/silverfish_eggs_1", "x": 90, "y": 180 },
+		"eggs=2,facing=south": { "model": "silverfish-expansion:block/silverfish_eggs_2", "x": 90, "y": 180 },
+		"eggs=3,facing=south": { "model": "silverfish-expansion:block/silverfish_eggs_3", "x": 90, "y": 180 },
+		"eggs=4,facing=south": { "model": "silverfish-expansion:block/silverfish_eggs_4", "x": 90, "y": 180 },
+
+		"eggs=1,facing=west": { "model": "silverfish-expansion:block/silverfish_eggs_1", "x": 90, "y": 270 },
+		"eggs=2,facing=west": { "model": "silverfish-expansion:block/silverfish_eggs_2", "x": 90, "y": 270 },
+		"eggs=3,facing=west": { "model": "silverfish-expansion:block/silverfish_eggs_3", "x": 90, "y": 270 },
+		"eggs=4,facing=west": { "model": "silverfish-expansion:block/silverfish_eggs_4", "x": 90, "y": 270 },
+
+		"eggs=1,facing=east": { "model": "silverfish-expansion:block/silverfish_eggs_1", "x": 90, "y": 90 },
+		"eggs=2,facing=east": { "model": "silverfish-expansion:block/silverfish_eggs_2", "x": 90, "y": 90 },
+		"eggs=3,facing=east": { "model": "silverfish-expansion:block/silverfish_eggs_3", "x": 90, "y": 90 },
+		"eggs=4,facing=east": { "model": "silverfish-expansion:block/silverfish_eggs_4", "x": 90, "y": 90 }
+	}
+}

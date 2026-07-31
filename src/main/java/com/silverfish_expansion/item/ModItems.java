@@ -1,6 +1,7 @@
 package com.silverfish_expansion.item;
 
 import com.silverfish_expansion.SilverfishExpansion;
+import com.silverfish_expansion.block.ModBlocks;
 import com.silverfish_expansion.entity.ModEntities;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.core.Registry;
@@ -21,6 +22,8 @@ public final class ModItems {
 			"mantis_silverfish_spawn_egg", ModEntities.MANTIS_SILVERFISH);
 	public static final SpawnEggItem FLY_SILVERFISH_SPAWN_EGG = registerSpawnEgg(
 			"fly_silverfish_spawn_egg", ModEntities.FLY_SILVERFISH);
+	public static final SpawnEggItem LARVA_SPAWN_EGG = registerSpawnEgg(
+			"larva_spawn_egg", ModEntities.LARVA);
 
 	private ModItems() {
 	}
@@ -43,6 +46,10 @@ public final class ModItems {
 			itemGroup.accept(ARANEO_SILVERFISH_SPAWN_EGG);
 			itemGroup.accept(MANTIS_SILVERFISH_SPAWN_EGG);
 			itemGroup.accept(FLY_SILVERFISH_SPAWN_EGG);
+			itemGroup.accept(LARVA_SPAWN_EGG);
+		});
+		ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.NATURAL_BLOCKS).register(itemGroup -> {
+			itemGroup.accept(ModBlocks.SILVERFISH_EGGS);
 		});
 	}
 }

@@ -5,8 +5,8 @@ import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRe
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 
@@ -14,6 +14,7 @@ public final class ModEntities {
 	public static final ResourceKey<EntityType<?>> ARANEO_SILVERFISH_KEY = entityKey("araneo_silverfish");
 	public static final ResourceKey<EntityType<?>> MANTIS_SILVERFISH_KEY = entityKey("mantis_silverfish");
 	public static final ResourceKey<EntityType<?>> FLY_SILVERFISH_KEY = entityKey("fly_silverfish");
+	public static final ResourceKey<EntityType<?>> LARVA_KEY = entityKey("larva");
 
 	public static final EntityType<ExpandedSilverfishEntity> ARANEO_SILVERFISH =
 			register(ARANEO_SILVERFISH_KEY, SilverfishVariant.ARANEO);
@@ -21,6 +22,15 @@ public final class ModEntities {
 			register(MANTIS_SILVERFISH_KEY, SilverfishVariant.MANTIS);
 	public static final EntityType<ExpandedSilverfishEntity> FLY_SILVERFISH =
 			register(FLY_SILVERFISH_KEY, SilverfishVariant.FLY);
+
+	public static final EntityType<SilverfishLarvaEntity> LARVA = Registry.register(
+			BuiltInRegistries.ENTITY_TYPE,
+			LARVA_KEY,
+			EntityType.Builder.of(SilverfishLarvaEntity::new, MobCategory.MONSTER)
+					.sized(0.4F, 0.3F)
+					.clientTrackingRange(8)
+					.build(LARVA_KEY)
+	);
 
 	private ModEntities() {
 	}
@@ -47,5 +57,6 @@ public final class ModEntities {
 		FabricDefaultAttributeRegistry.register(ARANEO_SILVERFISH, ExpandedSilverfishEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(MANTIS_SILVERFISH, ExpandedSilverfishEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(FLY_SILVERFISH, ExpandedSilverfishEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(LARVA, SilverfishLarvaEntity.createAttributes());
 	}
 }

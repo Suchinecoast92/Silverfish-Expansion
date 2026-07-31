@@ -1,5 +1,6 @@
 package com.silverfish_expansion;
 
+import com.silverfish_expansion.block.ModBlocks;
 import com.silverfish_expansion.entity.ModEntities;
 import com.silverfish_expansion.item.ModItems;
 import net.fabricmc.api.ModInitializer;
@@ -13,8 +14,9 @@ public class SilverfishExpansion implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+		ModBlocks.register();
 		ModEntities.registerAttributes();
 		ModItems.register();
-		LOGGER.info("Silverfish Expansion loaded with {} new silverfish variants.", 3);
+		LOGGER.info("Silverfish Expansion loaded.");
 	}
 }
