@@ -1,15 +1,16 @@
 # Silverfish Expansion
 
-Mod de **Fabric** para Minecraft **1.21.11** que añade variantes animadas de silverfish con **GeckoLib** y prepara un sistema de **colonia** con ciclo de vida completo.
+Mod de **Fabric** para Minecraft **1.21.11** que añade variantes animadas de silverfish con **GeckoLib** y un sistema de **colonia** en desarrollo (huevos → larva → piedra infestada → adultos).
 
 ## Estado actual
 
 | Contenido | Estado |
 |-----------|--------|
 | Adultos Araneo / Mantis / Fly | Completo (modelo, animaciones, comportamiento) |
-| Assets de larva | Añadidos (modelo + animaciones GeckoLib) |
-| Huevos amontonables | Pendiente (modelos en Blockbench) |
-| Piedra infestada de colonia | Pendiente |
+| Huevos amontonables | Completo (suelo, paredes y techo; 1–4 por bloque) |
+| Larvas | Completo (huyen, caminan y se meten en piedra) |
+| Maduración en piedra infestada vanilla | Completo (larva → silverfish → adulto) |
+| Iconos de creativo (spawn eggs e ítem de huevos) | Completo |
 | Matriarca y cámara de cría | Pendiente |
 
 ## Variantes adultas
@@ -40,42 +41,46 @@ Al parar de caminar suelen quedarse en `none`. Aproximadamente un 35 % de las ve
 3. **Aproximación** — descenso suave.
 4. **Aterrizaje** — `stopFlying` cerca del suelo, sin daño por caída.
 
-## Sistema de colonia (en desarrollo)
+## Sistema de colonia
 
 La colonia debe sentirse como un hábitat natural de cuevas, no como un dungeon ni un jefe.
 
-Ciclo de vida previsto:
+Ciclo de vida:
 
-**Huevos → Larvas → Piedra infestada → Adultos → Matriarca → Nuevos huevos**
+**Huevos → Larva → Piedra infestada vanilla → Silverfish juvenil → Adulto (Araneo / Mantis / Fly) → Matriarca → Nuevos huevos**
 
-### Piezas del ecosistema
+### Qué ya funciona
+
+| Pieza | Comportamiento actual |
+|-------|------------------------|
+| **Huevos** | Bloque amontonable (`eggs` 1–4), colocable en suelo, paredes y techo. Al romper o aplastar (solo suelo) pueden salir larvas (~60 %). Sonido de colocación como huevos de tortuga (`metal.place`); rotura con `TURTLE_EGG_BREAK`. |
+| **Larvas** | No atacan, huyen del jugador. Deben caminar ~2.5 bloques antes de meterse en piedra. Al entrar reproducen `insertStone_Front` o `insertStone_Down` y convierten la piedra en infestada vanilla. |
+| **Piedra infestada** | Sigue siendo el bloque vanilla. El mod guarda el momento de la infestación: al romperla, 0–3 min sale larva, 3–10 min silverfish vanilla, 10+ min una variante adulta al azar. |
+| **Iconos creativos** | Texturas 16×16 propias para spawn eggs y el ítem de huevos. |
+
+### Piezas pendientes
 
 | Pieza | Rol |
 |-------|-----|
 | **Cámara de cría** | Estructura natural en cuevas profundas (sin cofres ni loot artificial) |
-| **Huevos** | Bloques gelatinosos amontonables (1–4 por bloque, como pepinos de mar / velas), en suelo, paredes y techo |
-| **Larvas** | Fase juvenil: no atacan, huyen y buscan piedra para refugiarse |
-| **Piedra infestada** | Refugio de maduración; al romperla sale un adulto |
 | **Matriarca** | Única que pone huevos; alarma a los adultos si recibe daño |
 | **Decadencia** | Sin Matriarca no hay nuevos huevos; lo existente sigue su ciclo hasta agotarse |
 
-Los adultos actuales no cambian su comportamiento individual; la colonia se construye encima de ellos.
+### Próximos ajustes conocidos
+
+- Revisar que las larvas salidas de huevos usen bien `insertStone_Front`.
+- Evitar que silverfish, larvas y las 3 variantes aplasten los huevos.
 
 ### Assets de larva
 
-Ya están en el proyecto (pendientes de cablear del todo en código si hace falta):
-
 - `geckolib/models/entity/larva.geo.json`
-- `geckolib/animations/entity/larva.animation.json`
+- `geckolib/animations/entity/larva.animation.json` (`walk`, `insertStone_Front`, `insertStone_Down`)
 - Fuente Blockbench: `larva.bbmodel`
-
-### Próximo paso: huevos
-
-Se modelarán en Blockbench como bloque Java amontonable (`eggs=1..4`), con varios modelos según cantidad, y luego se integrarán al mod.
+- Textura: `textures/entity/larva.png`
 
 ## En el juego
 
-- Huevos de aparición de adultos en la pestaña creativa **Huevos de generación** / **Spawn Eggs**.
+- Spawn eggs de adultos y larva, más el ítem de huevos, en creativo.
 - Dependencias en tiempo de ejecución: **Fabric API** y **GeckoLib**.
 - Idiomas incluidos: inglés (`en_us`) y español México (`es_mx`).
 
@@ -103,7 +108,17 @@ IDs: `araneo_silverfish`, `mantis_silverfish`, `fly_silverfish`, `larva`.
 
 ### Huevos (bloque Java)
 
-Los huevos se exportan como **Java Block/Item** (no GeckoLib): modelos `block/silverfish_eggs_1` … `_4` y blockstate con propiedad `eggs`.
+Modelos `block/silverfish_eggs_1` … `_4`, blockstate con `eggs` + `facing`, e ítem con textura en `textures/item/silverfish_eggs.png`.
+
+### Iconos de ítem
+
+PNG 16×16 en `textures/item/`:
+
+- `araneo_silverfish_spawn_egg.png`
+- `mantis_silverfish_spawn_egg.png`
+- `fly_silverfish_spawn_egg.png`
+- `larva_spawn_egg.png`
+- `silverfish_eggs.png`
 
 ## Compilar
 

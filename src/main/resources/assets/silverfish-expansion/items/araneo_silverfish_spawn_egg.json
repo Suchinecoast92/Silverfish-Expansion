@@ -1,6 +1,6 @@
 {
 	"model": {
 		"type": "minecraft:model",
-		"model": "minecraft:item/template_spawn_egg"
+		"model": "silverfish-expansion:item/araneo_silverfish_spawn_egg"
 	}
 }

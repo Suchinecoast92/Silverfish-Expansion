@@ -48,14 +48,14 @@ public class SilverfishEggsBlock extends Block {
 
 	/**
 	 * TURTLE_EGG_BREAK only when the block actually breaks.
-	 * Place / step stay slime-like so placing does not crunch like a break.
+	 * Vanilla turtle eggs use the metal place sound when placed by hand.
 	 */
 	public static final SoundType SOUND_TYPE = new SoundType(
 			1.0F,
 			1.0F,
 			SoundEvents.TURTLE_EGG_BREAK,
 			SoundEvents.SLIME_BLOCK_STEP,
-			SoundEvents.SLIME_BLOCK_PLACE,
+			SoundEvents.METAL_PLACE,
 			SoundEvents.SLIME_BLOCK_HIT,
 			SoundEvents.SLIME_BLOCK_FALL
 	);
