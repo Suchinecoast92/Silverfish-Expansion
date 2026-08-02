@@ -10,6 +10,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Silverfish;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
@@ -27,9 +28,12 @@ import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.EntityCollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
+import com.silverfish_expansion.entity.ExpandedSilverfishEntity;
 import com.silverfish_expansion.entity.ModEntities;
 import com.silverfish_expansion.entity.SilverfishLarvaEntity;
 
@@ -109,6 +113,11 @@ public class SilverfishEggsBlock extends Block {
 
 	@Override
 	protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+		// Larvae pass through eggs so they never need to climb/jump them.
+		if (context instanceof EntityCollisionContext entityContext
+				&& entityContext.getEntity() instanceof SilverfishLarvaEntity) {
+			return Shapes.empty();
+		}
 		return shapeFor(state.getValue(FACING));
 	}
 
@@ -186,7 +195,10 @@ public class SilverfishEggsBlock extends Block {
 	}
 
 	private static boolean canCrush(Entity entity) {
-		if (entity instanceof ItemEntity) {
+		if (entity instanceof ItemEntity
+				|| entity instanceof SilverfishLarvaEntity
+				|| entity instanceof ExpandedSilverfishEntity
+				|| entity instanceof Silverfish) {
 			return false;
 		}
 		return entity instanceof LivingEntity;

@@ -8,10 +8,12 @@ Mod de **Fabric** para Minecraft **1.21.11** que añade variantes animadas de si
 |-----------|--------|
 | Adultos Araneo / Mantis / Fly | Completo (modelo, animaciones, comportamiento) |
 | Huevos amontonables | Completo (suelo, paredes y techo; 1–4 por bloque) |
-| Larvas | Completo (huyen, caminan y se meten en piedra) |
+| Larvas | Completo (movimiento, animaciones de entrada y reservas de piedra) |
 | Maduración en piedra infestada vanilla | Completo (larva → silverfish → adulto) |
 | Iconos de creativo (spawn eggs e ítem de huevos) | Completo |
 | Matriarca y cámara de cría | Pendiente |
+| Eclosión natural de huevos | Pendiente |
+| Spawns naturales en cuevas | Pendiente |
 
 ## Variantes adultas
 
@@ -53,23 +55,20 @@ Ciclo de vida:
 
 | Pieza | Comportamiento actual |
 |-------|------------------------|
-| **Huevos** | Bloque amontonable (`eggs` 1–4), colocable en suelo, paredes y techo. Al romper o aplastar (solo suelo) pueden salir larvas (~60 %). Sonido de colocación como huevos de tortuga (`metal.place`); rotura con `TURTLE_EGG_BREAK`. |
-| **Larvas** | No atacan, huyen del jugador. Deben caminar ~2.5 bloques antes de meterse en piedra. Al entrar reproducen `insertStone_Front` o `insertStone_Down` y convierten la piedra en infestada vanilla. |
-| **Piedra infestada** | Sigue siendo el bloque vanilla. El mod guarda el momento de la infestación: al romperla, 0–3 min sale larva, 3–10 min silverfish vanilla, 10+ min una variante adulta al azar. |
+| **Huevos** | Bloque amontonable (`eggs` 1–4), en suelo, paredes y techo. Al romper o aplastar (solo suelo) pueden salir larvas (~60 %). Colocación con sonido `metal.place` (como tortuga); rotura con `TURTLE_EGG_BREAK`. Larvas, silverfish vanilla y las 3 variantes **no** aplastan huevos. Las larvas **atraviesan** los huevos (sin colisión). |
+| **Larvas** | No atacan, huyen del jugador, sin salto. Tras ~1 bloque o ~1.5 s pueden infestarse. Priorizan piedra debajo (`insertStone_Down`) o al frente (`insertStone_Front`), pegadas a la cara del bloque. Dos larvas no reclaman la misma piedra. Al entrar salen migas pequeñas de piedra alrededor de la larva (sin explosión de partículas de rotura). `walk` a velocidad ×2. |
+| **Piedra infestada** | Bloque vanilla. El mod guarda el momento de la infestación: al romperla, 0–3 min sale larva, 3–10 min silverfish vanilla, 10+ min una variante adulta al azar. |
 | **Iconos creativos** | Texturas 16×16 propias para spawn eggs y el ítem de huevos. |
 
 ### Piezas pendientes
 
 | Pieza | Rol |
 |-------|-----|
+| **Eclosión natural** | Huevos que eclosionan solos con `TURTLE_EGG_CRACK` |
 | **Cámara de cría** | Estructura natural en cuevas profundas (sin cofres ni loot artificial) |
 | **Matriarca** | Única que pone huevos; alarma a los adultos si recibe daño |
 | **Decadencia** | Sin Matriarca no hay nuevos huevos; lo existente sigue su ciclo hasta agotarse |
-
-### Próximos ajustes conocidos
-
-- Revisar que las larvas salidas de huevos usen bien `insertStone_Front`.
-- Evitar que silverfish, larvas y las 3 variantes aplasten los huevos.
+| **Spawns naturales** | Aparición de colonia / adultos en cuevas, no solo creativo |
 
 ### Assets de larva
 
