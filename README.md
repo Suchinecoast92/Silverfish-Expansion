@@ -1,87 +1,127 @@
 # Silverfish Expansion
 
-Mod de **Fabric** para Minecraft **1.21.11** que añade variantes animadas de silverfish con **GeckoLib** y un sistema de **colonia** en desarrollo (huevos → larva → piedra infestada → adultos).
+Mod de **Fabric** para Minecraft **1.21.11** que añade variantes animadas de silverfish con **GeckoLib** y un sistema de **colonia** en desarrollo.
+
+Ciclo de vida previsto:
+
+**Huevos → Larva → Piedra infestada vanilla → Silverfish → Adulto (Araneo / Mantis / Fly) → Matriarca → Nuevos huevos**
 
 ## Estado actual
 
 | Contenido | Estado |
 |-----------|--------|
-| Adultos Araneo / Mantis / Fly | Completo (modelo, animaciones, comportamiento) |
-| Huevos amontonables | Completo (suelo, paredes y techo; 1–4 por bloque) |
-| Larvas | Completo (movimiento, animaciones de entrada y reservas de piedra) |
-| Maduración en piedra infestada vanilla | Completo (larva → silverfish → adulto) |
-| Iconos de creativo (spawn eggs e ítem de huevos) | Completo |
-| Matriarca y cámara de cría | Pendiente |
+| Adultos Araneo / Mantis / Fly | Completo |
+| Deambulación errática / curiosa | Completo |
+| Huevos amontonables | Completo |
+| Larvas e infestación | Completo |
+| Maduración en piedra infestada vanilla | Completo |
+| Cámara de cría (worldgen) | Completo (sin Matriarca aún) |
+| Iconos de creativo | Completo |
+| Matriarca | Pendiente |
 | Eclosión natural de huevos | Pendiente |
-| Spawns naturales en cuevas | Pendiente |
+| Decadencia sin Matriarca | Pendiente |
+| Spawns naturales fuera de la cámara | Pendiente |
 
 ## Variantes adultas
 
-| Variante | ID de entidad | Modelo de origen |
-|----------|---------------|------------------|
-| Araneo Silverfish | `araneo_silverfish` | `silverfish2.bbmodel` |
-| Mantis Silverfish | `mantis_silverfish` | `silverfish2-mantis.bbmodel` |
-| Fly Silverfish | `fly_silverfish` | `silverfish2-fly.bbmodel` |
+| Variante | ID de entidad | Notas |
+|----------|---------------|--------|
+| Araneo Silverfish | `araneo_silverfish` | Terrestre |
+| Mantis Silverfish | `mantis_silverfish` | Terrestre |
+| Fly Silverfish | `fly_silverfish` | Vuela a baja altura |
 
-### Animaciones de adultos
+### Animaciones
 
-| Animación | Quién la usa | Cuándo se reproduce |
-|-----------|--------------|---------------------|
-| `walk` | Las 3 | Solo cuando se desplazan de verdad |
+| Animación | Quién | Cuándo |
+|-----------|-------|--------|
+| `walk` | Las 3 | Solo al desplazarse de verdad |
 | `none` | Las 3 | Pose neutra al detenerse |
-| `idle` / `idle2` | Las 3 | De vez en cuando, una sola vez, y vuelven a `none` |
+| `idle` / `idle2` | Las 3 | Idle ocasional (~35 %), una vez, luego `none` |
 | `idle3` | Solo Fly | Igual que los otros idles |
-| `startFlying` → `flying` | Solo Fly | Despegue y vuelo libre |
-| `stopFlying` | Solo Fly | Aterrizaje cerca del suelo |
+| `startFlying` → `flying` | Solo Fly | Despegue y vuelo |
+| `stopFlying` | Solo Fly | Aterrizaje sin daño por caída |
 
-Al parar de caminar suelen quedarse en `none`. Aproximadamente un 35 % de las veces ejecutan un idle breve y luego regresan a la pose neutra.
+### Comportamiento
 
-### Comportamiento del Fly Silverfish
+- **Deambulación errática**: trayectos cortos, cambios de rumbo, pausas “curiosas” y velocidad variable (las 3 variantes; Fly solo en suelo).
+- **Mirada curiosa**: giros de cabeza ocasionales.
+- **Fly**: vuelo local respecto al suelo/techo cercano (sin atravesar techos ni despegar en techos bajos).
 
-1. **Despegue** — espera a que arranque `startFlying` y sube despacio.
-2. **Vuelo libre** — movimiento errático a baja altura.
-3. **Aproximación** — descenso suave.
-4. **Aterrizaje** — `stopFlying` cerca del suelo, sin daño por caída.
+## Huevos
 
-## Sistema de colonia
+- Stack 1–4; se colocan en **suelo, paredes y techo** (`facing`).
+- Sonido de colocación tipo tortuga (`metal.place`); rotura `TURTLE_EGG_BREAK`.
+- Aplastamiento solo en suelo (como huevos de tortuga).
+- ~60 % de chance de larva al romper/aplastar un huevo.
+- Larva, silverfish vanilla y las 3 variantes **no aplastan** los huevos.
+- Toda la colonia **atraviesa** los huevos (sin colisión ni saltos de pathfinding).
 
-La colonia debe sentirse como un hábitat natural de cuevas, no como un dungeon ni un jefe.
+## Larvas
 
-Ciclo de vida:
+- No atacan; huyen del jugador; sin salto; `walk` a velocidad ×2.
+- Tras caminar ~1 bloque o ~1.5 s pueden infestarse.
+- Animaciones `insertStone_Front` / `insertStone_Down`, alineadas a la cara del bloque.
+- Una larva por piedra (reserva).
+- Partículas de polvo al entrar (sin burst de rotura).
 
-**Huevos → Larva → Piedra infestada vanilla → Silverfish juvenil → Adulto (Araneo / Mantis / Fly) → Matriarca → Nuevos huevos**
+## Piedra infestada (vanilla)
 
-### Qué ya funciona
+El mod registra el momento de la infestación (`ColonyInfestationData`). Al romper:
 
-| Pieza | Comportamiento actual |
-|-------|------------------------|
-| **Huevos** | Bloque amontonable (`eggs` 1–4), en suelo, paredes y techo. Al romper o aplastar (solo suelo) pueden salir larvas (~60 %). Colocación con sonido `metal.place` (como tortuga); rotura con `TURTLE_EGG_BREAK`. Larvas, silverfish vanilla y las 3 variantes **no** aplastan huevos. Las larvas **atraviesan** los huevos (sin colisión). |
-| **Larvas** | No atacan, huyen del jugador, sin salto. Tras ~1 bloque o ~1.5 s pueden infestarse. Priorizan piedra debajo (`insertStone_Down`) o al frente (`insertStone_Front`), pegadas a la cara del bloque. Dos larvas no reclaman la misma piedra. Al entrar salen migas pequeñas de piedra alrededor de la larva (sin explosión de partículas de rotura). `walk` a velocidad ×2. |
-| **Piedra infestada** | Bloque vanilla. El mod guarda el momento de la infestación: al romperla, 0–3 min sale larva, 3–10 min silverfish vanilla, 10+ min una variante adulta al azar. |
-| **Iconos creativos** | Texturas 16×16 propias para spawn eggs y el ítem de huevos. |
+| Edad | Resultado |
+|------|-----------|
+| 0–3 min | Larva |
+| 3–10 min | Silverfish vanilla |
+| 10+ min | Adulto al azar (Araneo / Mantis / Fly) |
 
-### Piezas pendientes
+## Cámara de cría
+
+Estructura subterránea natural (no dungeon). Localizar con:
+
+```
+/locate structure silverfish-expansion:breeding_chamber
+```
+
+### Forma
+
+- Cavidad irregular por metaballs (varios lóbulos + salas laterales).
+- Red tipo hormiguero: nodos satélite conectados por túneles, cruces entre nodos y túneles exploratorios largos.
+- Algunos túneles conectan con cuevas vanilla; otros se pierden en la roca.
+- Rareza aprox.: spacing 32 / separation 12; altura entre y=-44 y y=4.
+
+### Decoración (filosofía vanilla)
+
+Piedra / deepslate dominante, con manchas raras y **bordes ruidosos** de:
+
+- grava y grava sospechosa (loot vanilla `trail_ruins_archaeology_common`)
+- tierra, tierra basta, tierra enraizada (soporte de raíces)
+- toba, andesita, cobble
+- vetas de carbón, hierro, cobre y algo de redstone
+- liquen brillante (única luz), raíces colgantes, musgo pálido colgante
+- hongos, huevos irregulares, piedras infestadas maduras
+
+**Sin** agua (las zonas bajas son depresiones de grava/tierra), sin dripstone, sin cofres, sin spawners, sin loot artificial.
+
+### Fauna en la cámara
+
+Spawns controlados (grupos pequeños) de Araneo, Mantis, Fly y silverfish vanilla. Las piedras infestadas de la cámara están “maduras”: al romperlas sale un adulto.
+
+La **Matriarca** aún no existe; el ancla de spawn está preparada en la zona más ancha.
+
+## Pendiente
 
 | Pieza | Rol |
 |-------|-----|
-| **Eclosión natural** | Huevos que eclosionan solos con `TURTLE_EGG_CRACK` |
-| **Cámara de cría** | Estructura natural en cuevas profundas (sin cofres ni loot artificial) |
-| **Matriarca** | Única que pone huevos; alarma a los adultos si recibe daño |
-| **Decadencia** | Sin Matriarca no hay nuevos huevos; lo existente sigue su ciclo hasta agotarse |
-| **Spawns naturales** | Aparición de colonia / adultos en cuevas, no solo creativo |
-
-### Assets de larva
-
-- `geckolib/models/entity/larva.geo.json`
-- `geckolib/animations/entity/larva.animation.json` (`walk`, `insertStone_Front`, `insertStone_Down`)
-- Fuente Blockbench: `larva.bbmodel`
-- Textura: `textures/entity/larva.png`
+| **Eclosión natural** | Huevos que eclosionan solos (`TURTLE_EGG_CRACK` + larva) |
+| **Matriarca** | Pone huevos; alerta a la colonia al recibir daño |
+| **Decadencia** | Sin Matriarca no hay nuevos huevos |
+| **Spawns naturales** | Colonia / adultos en cuevas fuera de la estructura |
 
 ## En el juego
 
 - Spawn eggs de adultos y larva, más el ítem de huevos, en creativo.
-- Dependencias en tiempo de ejecución: **Fabric API** y **GeckoLib**.
-- Idiomas incluidos: inglés (`en_us`) y español México (`es_mx`).
+- Dependencias: **Fabric API** y **GeckoLib**.
+- Idiomas: inglés (`en_us`) y español México (`es_mx`).
 
 ## Requisitos
 
@@ -97,8 +137,6 @@ Ciclo de vida:
 
 ### Entidades (GeckoLib)
 
-Si editas los `.bbmodel` de entidades, exporta con el plugin **GeckoLib**:
-
 1. **File → Export → Export GeckoLib Model** → `geckolib/models/entity/{id}.geo.json`
 2. **File → Export → Export GeckoLib Animations** → `geckolib/animations/entity/{id}.animation.json`
 3. Textura → `textures/entity/{id}.png`
@@ -107,17 +145,11 @@ IDs: `araneo_silverfish`, `mantis_silverfish`, `fly_silverfish`, `larva`.
 
 ### Huevos (bloque Java)
 
-Modelos `block/silverfish_eggs_1` … `_4`, blockstate con `eggs` + `facing`, e ítem con textura en `textures/item/silverfish_eggs.png`.
+Modelos `block/silverfish_eggs_1` … `_4`, blockstate con `eggs` + `facing`, ítem en `textures/item/silverfish_eggs.png`.
 
-### Iconos de ítem
+### Iconos
 
-PNG 16×16 en `textures/item/`:
-
-- `araneo_silverfish_spawn_egg.png`
-- `mantis_silverfish_spawn_egg.png`
-- `fly_silverfish_spawn_egg.png`
-- `larva_spawn_egg.png`
-- `silverfish_eggs.png`
+PNG 16×16 en `textures/item/` para spawn eggs e ítem de huevos.
 
 ## Compilar
 
@@ -125,7 +157,7 @@ PNG 16×16 en `textures/item/`:
 .\gradlew.bat build
 ```
 
-El JAR queda en: `build/libs/silverfish-expansion-1.0.0.jar`
+JAR: `build/libs/silverfish-expansion-1.0.0.jar`
 
 ## Repositorio
 

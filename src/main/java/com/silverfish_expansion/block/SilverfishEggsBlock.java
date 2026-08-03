@@ -113,12 +113,23 @@ public class SilverfishEggsBlock extends Block {
 
 	@Override
 	protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		// Larvae pass through eggs so they never need to climb/jump them.
-		if (context instanceof EntityCollisionContext entityContext
-				&& entityContext.getEntity() instanceof SilverfishLarvaEntity) {
+		// Powder-snow pattern: solid only for real entities outside the colony.
+		// Context-less queries (AI, pathfinding, MoveControl's "stuck in block"
+		// jump check) see no collision, so colony mobs walk through without jumping.
+		if (context instanceof EntityCollisionContext entityContext) {
+			Entity entity = entityContext.getEntity();
+			if (entity != null && !isColonyMember(entity)) {
+				return shapeFor(state.getValue(FACING));
+			}
 			return Shapes.empty();
 		}
 		return shapeFor(state.getValue(FACING));
+	}
+
+	private static boolean isColonyMember(Entity entity) {
+		return entity instanceof SilverfishLarvaEntity
+				|| entity instanceof ExpandedSilverfishEntity
+				|| entity instanceof Silverfish;
 	}
 
 	private static VoxelShape shapeFor(Direction facing) {
@@ -268,6 +279,9 @@ public class SilverfishEggsBlock extends Block {
 				.strength(0.5F)
 				.sound(SOUND_TYPE)
 				.noOcclusion()
+				// Not "solid" for AI checks: random wander targets otherwise get pushed
+				// one block above the eggs, making mobs jump to reach them.
+				.forceSolidOff()
 				.pushReaction(PushReaction.DESTROY);
 	}
 }

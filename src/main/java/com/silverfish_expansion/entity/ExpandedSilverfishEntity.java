@@ -15,13 +15,13 @@ import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
-import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+import com.silverfish_expansion.entity.ai.CuriousSilverfishLookGoal;
+import com.silverfish_expansion.entity.ai.ErraticSilverfishWanderGoal;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.animatable.manager.AnimatableManager;
@@ -55,6 +55,12 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 	private static final int MIN_FLIGHT_TICKS = 140;
 	private static final int MAX_FLIGHT_TICKS = 280;
 	private static final double LAND_ANIM_HEIGHT = 0.85; // start stopFlying near the ground
+	/** Need more than ~1 free block above the body to start flying. */
+	private static final double MIN_TAKEOFF_HEADROOM = 1.05;
+	/** Abort climb / force descent when this little free space remains above. */
+	private static final double MIN_FLIGHT_HEADROOM = 0.35;
+	private static final int LOCAL_FLOOR_SCAN_DOWN = 8;
+	private static final int LOCAL_CEILING_SCAN_UP = 5;
 	/** Chance to play a real idle when stopping; otherwise stay in neutral "none". */
 	private static final float IDLE_CHANCE_ON_STOP = 0.35F;
 	/** Window used to measure how far the entity actually travelled. */
@@ -176,6 +182,10 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 			return;
 		}
 		if (flying) {
+			if (!hasTakeoffClearance()) {
+				flyCooldown = 80 + random.nextInt(80);
+				return;
+			}
 			setFlightState(FLIGHT_FLYING);
 			flyTicks = 0;
 			flightRetargetTicks = 0;
@@ -199,20 +209,69 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 	}
 
 	private double heightAboveGround() {
-		int groundY = level().getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(getX()), Mth.floor(getZ()));
-		return getY() - groundY;
+		return getY() - localFloorY(getX(), getY(), getZ());
+	}
+
+	private double availableHeadroom() {
+		return localCeilingY(getX(), getY(), getZ()) - (getY() + getBbHeight());
+	}
+
+	private boolean hasTakeoffClearance() {
+		// Enough open air above, and room to rise off the floor a bit.
+		return availableHeadroom() >= MIN_TAKEOFF_HEADROOM
+				&& hasCollisionFreeOffset(0.0, 0.55, 0.0);
+	}
+
+	private boolean hasCollisionFreeOffset(double dx, double dy, double dz) {
+		return level().noCollision(this, getBoundingBox().move(dx, dy, dz));
+	}
+
+	private double localFloorY(double x, double y, double z) {
+		int blockX = Mth.floor(x);
+		int blockZ = Mth.floor(z);
+		int startY = Mth.floor(y);
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+
+		for (int dy = 0; dy <= LOCAL_FLOOR_SCAN_DOWN; dy++) {
+			cursor.set(blockX, startY - dy, blockZ);
+			if (!level().getBlockState(cursor).getCollisionShape(level(), cursor).isEmpty()) {
+				return cursor.getY() + 1.0;
+			}
+		}
+
+		return y - 0.5;
+	}
+
+	private double localCeilingY(double x, double y, double z) {
+		int blockX = Mth.floor(x);
+		int blockZ = Mth.floor(z);
+		int startY = Mth.floor(y + getBbHeight());
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+
+		for (int dy = 0; dy <= LOCAL_CEILING_SCAN_UP; dy++) {
+			cursor.set(blockX, startY + dy, blockZ);
+			if (!level().getBlockState(cursor).getCollisionShape(level(), cursor).isEmpty()) {
+				return cursor.getY();
+			}
+		}
+
+		return y + getBbHeight() + LOCAL_CEILING_SCAN_UP;
 	}
 
 	@Override
 	protected void registerGoals() {
 		goalSelector.addGoal(0, new FloatGoal(this));
 		goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.0, false));
-		// Fly prefers air travel: stroll rarely on ground. Others walk more like spiders.
-		int strollInterval = getVariant() == SilverfishVariant.FLY ? 360 : 200;
-		goalSelector.addGoal(5, new WaterAvoidingRandomStrollGoal(this, 0.75, strollInterval));
+		// Nervous short hops + curious pauses; Fly only while grounded.
+		goalSelector.addGoal(5, new ErraticSilverfishWanderGoal(this, 0.95, this::canWanderOnGround));
+		goalSelector.addGoal(6, new CuriousSilverfishLookGoal(this, this::canWanderOnGround));
 		goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 		targetSelector.addGoal(1, new HurtByTargetGoal(this));
+	}
+
+	private boolean canWanderOnGround() {
+		return getVariant() != SilverfishVariant.FLY || getFlightState() == FLIGHT_GROUND;
 	}
 
 	@Override
@@ -255,7 +314,7 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 		}
 
 		// Prefers flying over long ground travel
-		if (onGround() && random.nextInt(70) == 0) {
+		if (onGround() && random.nextInt(70) == 0 && hasTakeoffClearance()) {
 			setFlying(true);
 		}
 	}
@@ -379,7 +438,21 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 		} else if (flyTicks < TAKEOFF_ANIM_DELAY + TAKEOFF_LIFT_TICKS) {
 			// Phase 1b — soft takeoff lift (same feel as before, synced with startFlying)
 			setNoGravity(true);
-			double lift = Math.min(motion.y + 0.035, 0.11);
+			double headroom = availableHeadroom();
+			// Do NOT use verticalCollision here: standing on the floor also sets it and aborted flight instantly.
+			if (headroom < MIN_FLIGHT_HEADROOM) {
+				setFlying(false);
+				return;
+			}
+			double maxLift = Math.min(0.11, Math.max(0.02, headroom * 0.25));
+			double lift = Math.min(motion.y + 0.035, maxLift);
+			if (!hasCollisionFreeOffset(0.0, Math.max(0.05, lift), 0.0)) {
+				lift = Math.min(0.0, motion.y);
+				if (headroom < 0.7) {
+					setFlying(false);
+					return;
+				}
+			}
 			setDeltaMovement(motion.x * 0.96, lift, motion.z * 0.96);
 		} else {
 			// Phase 2 — free erratic flight (flying loop)
@@ -422,13 +495,28 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 		double speed = 0.14 + random.nextDouble() * 0.08;
 		Vec3 desired = dir.scale(speed);
 		Vec3 motion = getDeltaMovement();
+		double headroom = availableHeadroom();
+		if (headroom < MIN_FLIGHT_HEADROOM) {
+			desired = new Vec3(desired.x, Math.min(desired.y, -0.04), desired.z);
+			if (headroom < 0.2) {
+				setFlying(false);
+				return;
+			}
+		}
+		if (!hasCollisionFreeOffset(desired.x, desired.y, desired.z)) {
+			flightRetargetTicks = 0;
+			Vec3 fallback = new Vec3(desired.x * 0.4, Math.min(desired.y, -0.05), desired.z * 0.4);
+			desired = hasCollisionFreeOffset(fallback.x, fallback.y, fallback.z)
+					? fallback
+					: new Vec3(-motion.x * 0.3, -0.05, -motion.z * 0.3);
+		}
 		setDeltaMovement(
 				Mth.lerp(0.35, motion.x, desired.x),
 				Mth.lerp(0.35, motion.y, desired.y),
 				Mth.lerp(0.35, motion.z, desired.z)
 		);
 
-		if (horizontalCollision || verticalCollision) {
+		if (horizontalCollision || (verticalCollision && !onGround())) {
 			flightRetargetTicks = 0;
 		}
 
@@ -442,29 +530,34 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 
 	private Vec3 pickErraticAirTarget() {
 		BlockPos origin = blockPosition();
-		double groundY = level().getHeight(Heightmap.Types.MOTION_BLOCKING, origin.getX(), origin.getZ());
+		double currentFloorY = localFloorY(getX(), getY(), getZ());
 
-		for (int attempt = 0; attempt < 8; attempt++) {
-			double dx = (random.nextDouble() - 0.5) * 10.0;
-			double dz = (random.nextDouble() - 0.5) * 10.0;
-			double hover = 0.6 + random.nextDouble() * 1.8; // stay low
+		for (int attempt = 0; attempt < 12; attempt++) {
+			double dx = (random.nextDouble() - 0.5) * 7.0;
+			double dz = (random.nextDouble() - 0.5) * 7.0;
+			double hover = 0.45 + random.nextDouble() * 1.35; // stay low in caves
 			double x = getX() + dx;
 			double z = getZ() + dz;
-			int sampleGround = level().getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(x), Mth.floor(z));
-			double y = sampleGround + hover;
-			// Prefer staying near current height band
-			y = Mth.clamp(y, groundY + 0.4, groundY + 2.6);
-			BlockPos check = BlockPos.containing(x, y, z);
-			if (level().isEmptyBlock(check) && level().isEmptyBlock(check.above())) {
+			double floorY = localFloorY(x, getY(), z);
+			double ceilingY = localCeilingY(x, floorY, z);
+			double maxY = Math.min(floorY + 2.0, ceilingY - getBbHeight() - 0.15);
+			if (maxY <= floorY + 0.25) {
+				continue;
+			}
+			double y = Mth.clamp(floorY + hover, floorY + 0.25, maxY);
+			// Prefer staying near current cave layer, not hopping through ceilings/floors.
+			y = Mth.clamp(y, currentFloorY + 0.25, currentFloorY + 2.0);
+			if (hasCollisionFreeOffset(x - getX(), y - getY(), z - getZ())) {
 				return new Vec3(x, y, z);
 			}
 		}
 
-		return new Vec3(
-				getX() + (random.nextDouble() - 0.5) * 4.0,
-				Math.max(getY() + (random.nextDouble() - 0.4) * 1.2, groundY + 0.8),
-				getZ() + (random.nextDouble() - 0.5) * 4.0
-		);
+		double fallbackMaxY = localCeilingY(getX(), getY(), getZ()) - getBbHeight() - 0.15;
+		double fallbackMinY = currentFloorY + 0.25;
+		double safeY = fallbackMaxY <= fallbackMinY
+				? getY()
+				: Mth.clamp(getY() - 0.15, fallbackMinY, fallbackMaxY);
+		return new Vec3(getX(), safeY, getZ());
 	}
 
 	@Override

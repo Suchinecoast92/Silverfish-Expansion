@@ -1,0 +1,15 @@
+{
+	"structures": [
+		{
+			"structure": "silverfish-expansion:breeding_chamber",
+			"weight": 1
+		}
+	],
+	"placement": {
+		"type": "minecraft:random_spread",
+		"spacing": 32,
+		"separation": 12,
+		"spread_type": "linear",
+		"salt": 749183624
+	}
+}

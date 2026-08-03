@@ -1,0 +1,46 @@
+{
+	"type": "silverfish-expansion:breeding_chamber",
+	"biomes": "#silverfish-expansion:has_structure/breeding_chamber",
+	"step": "underground_structures",
+	"terrain_adaptation": "none",
+	"height": {
+		"type": "minecraft:uniform",
+		"min_inclusive": {
+			"absolute": -44
+		},
+		"max_inclusive": {
+			"absolute": 4
+		}
+	},
+	"spawn_overrides": {
+		"monster": {
+			"bounding_box": "piece",
+			"spawns": [
+				{
+					"type": "silverfish-expansion:araneo_silverfish",
+					"weight": 3,
+					"minCount": 1,
+					"maxCount": 1
+				},
+				{
+					"type": "silverfish-expansion:mantis_silverfish",
+					"weight": 2,
+					"minCount": 1,
+					"maxCount": 1
+				},
+				{
+					"type": "silverfish-expansion:fly_silverfish",
+					"weight": 2,
+					"minCount": 1,
+					"maxCount": 1
+				},
+				{
+					"type": "minecraft:silverfish",
+					"weight": 2,
+					"minCount": 1,
+					"maxCount": 1
+				}
+			]
+		}
+	}
+}

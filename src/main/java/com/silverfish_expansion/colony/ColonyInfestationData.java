@@ -10,9 +10,9 @@ import net.minecraft.world.level.block.InfestedBlock;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Tracks vanilla infested blocks created by larvae, with game-time-based maturation:
@@ -40,7 +40,8 @@ public class ColonyInfestationData extends SavedData {
 			DataFixTypes.SAVED_DATA_SCOREBOARD
 	);
 
-	private final Map<Long, PackedEntry> entries = new HashMap<>();
+	/** Concurrent: worldgen registers infestations while the server tick may clean them up. */
+	private final Map<Long, PackedEntry> entries = new ConcurrentHashMap<>();
 
 	public ColonyInfestationData() {
 	}
@@ -87,13 +88,16 @@ public class ColonyInfestationData extends SavedData {
 
 	/** Drop stale entries whose block is no longer infested. */
 	public void cleanup(ServerLevel level) {
-		boolean changed = entries.entrySet().removeIf(entry -> {
-			BlockPos pos = BlockPos.of(entry.getKey());
+		boolean changed = false;
+		for (Long key : entries.keySet()) {
+			BlockPos pos = BlockPos.of(key);
 			if (!level.isLoaded(pos)) {
-				return false;
+				continue;
 			}
-			return !(level.getBlockState(pos).getBlock() instanceof InfestedBlock);
-		});
+			if (!(level.getBlockState(pos).getBlock() instanceof InfestedBlock) && entries.remove(key) != null) {
+				changed = true;
+			}
+		}
 		if (changed) {
 			setDirty();
 		}
