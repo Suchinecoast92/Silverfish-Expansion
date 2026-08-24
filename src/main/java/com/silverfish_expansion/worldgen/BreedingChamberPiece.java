@@ -97,6 +97,7 @@ public class BreedingChamberPiece extends StructurePiece {
 	private static final int SALT_FLOOR_TUFF = 30;
 	private static final int SALT_FLOOR_DITHER = 31;
 	private static final int SALT_WALL_DITHER = 32;
+	private static final float SUSPICIOUS_GRAVEL_CHANCE = 0.20F;
 
 	private static final Direction[] EGG_FACES = {
 			Direction.DOWN, Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST, Direction.UP
@@ -897,9 +898,9 @@ public class BreedingChamberPiece extends StructurePiece {
 		return posRand(x, y, z, ditherSalt + 101) < chance;
 	}
 
-	/** Gravel bed with a higher suspicious rate so rare patches still reward brushing. */
+	/** Gravel bed: one in five blocks is suspicious so the patches are worth brushing. */
 	private BlockState gravel(int x, int y, int z) {
-		return posRand(x, y, z, SALT_SUSPICIOUS) < 0.045F
+		return posRand(x, y, z, SALT_SUSPICIOUS) < SUSPICIOUS_GRAVEL_CHANCE
 				? Blocks.SUSPICIOUS_GRAVEL.defaultBlockState()
 				: Blocks.GRAVEL.defaultBlockState();
 	}

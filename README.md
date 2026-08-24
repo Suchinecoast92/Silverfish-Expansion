@@ -99,7 +99,7 @@ Estructura subterránea natural (no dungeon). Localizar con:
 
 Piedra / deepslate dominante, con manchas raras y **bordes ruidosos** de:
 
-- grava y grava sospechosa (loot vanilla `trail_ruins_archaeology_common`)
+- grava y **grava sospechosa** (~20 % de la grava; loot vanilla `trail_ruins_archaeology_common`)
 - tierra, tierra basta, tierra enraizada (soporte de raíces)
 - toba, andesita, cobble
 - vetas de carbón, hierro, cobre y algo de redstone
