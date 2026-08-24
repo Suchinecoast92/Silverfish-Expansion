@@ -24,7 +24,7 @@ import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.InfestedBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -58,9 +58,9 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 	private static final RawAnimation BURROW_FRONT_ANIM = RawAnimation.begin().thenPlay("insertStone_Front");
 	private static final RawAnimation BURROW_DOWN_ANIM = RawAnimation.begin().thenPlay("insertStone_Down");
 	/** Must roam at least this far before burrowing into stone. */
-	private static final double MIN_WALK_BEFORE_INFEST = 1.0;
+	private static final double MIN_WALK_BEFORE_INFEST = 0.45;
 	/** Fallback so a larva pressed against a wall still stops being a hatchling. */
-	private static final int MIN_TICKS_BEFORE_INFEST = 30;
+	private static final int MIN_TICKS_BEFORE_INFEST = 12;
 	/** One larva per stone: UUID of the larva that currently claims that block. */
 	private static final Map<Long, UUID> CLAIMED_STONES = new ConcurrentHashMap<>();
 
@@ -71,6 +71,7 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 	private int burrowTicks;
 	private BlockPos pendingInfestPos;
 	private BlockState pendingInfestedState;
+	private boolean infestationApplied;
 	@Nullable
 	private Direction pendingBurrowFace;
 	@Nullable
@@ -125,11 +126,25 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 		alignForBurrow(pos, burrowState, face);
 		getNavigation().stop();
 		setDeltaMovement(Vec3.ZERO);
+		noPhysics = true;
 		pendingInfestPos = pos.immutable();
 		pendingInfestedState = infestedState;
+		infestationApplied = false;
 		burrowTicks = BURROW_ANIMATION_TICKS;
 		entityData.set(DATA_BURROW_STATE, burrowState);
 		spawnBurrowDust(serverLevel, serverLevel.getBlockState(pos), 10);
+		// Convert immediately so a death mid-animation still leaves infested stone.
+		applyPendingInfestation();
+	}
+
+	@Override
+	public boolean isInWall() {
+		return !isBurrowing() && super.isInWall();
+	}
+
+	@Override
+	public boolean isPushable() {
+		return !isBurrowing() && super.isPushable();
 	}
 
 	/** Small stone crumbs around the larva while it digs in. */
@@ -178,8 +193,10 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 	@Override
 	public void remove(RemovalReason reason) {
 		if (!level().isClientSide()) {
+			applyPendingInfestation();
 			releaseClaimedStone();
 		}
+		noPhysics = false;
 		super.remove(reason);
 	}
 
@@ -265,26 +282,40 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 	}
 
 	private void finishBurrow() {
-		if (!(level() instanceof ServerLevel serverLevel) || pendingInfestPos == null || pendingInfestedState == null) {
-			entityData.set(DATA_BURROW_STATE, BURROW_NONE);
-			pendingBurrowFace = null;
-			releaseClaimedStone();
-			return;
-		}
-
-		BlockState currentState = serverLevel.getBlockState(pendingInfestPos);
-		if (InfestStoneGoal.infestedStateFor(currentState) == null) {
-			pendingInfestPos = null;
-			pendingInfestedState = null;
-			pendingBurrowFace = null;
-			entityData.set(DATA_BURROW_STATE, BURROW_NONE);
-			releaseClaimedStone();
-			return;
-		}
-
-		serverLevel.setBlock(pendingInfestPos, pendingInfestedState, Block.UPDATE_ALL);
-		ColonyInfestationData.get(serverLevel).register(pendingInfestPos, serverLevel.getGameTime());
+		applyPendingInfestation();
+		entityData.set(DATA_BURROW_STATE, BURROW_NONE);
+		pendingBurrowFace = null;
+		pendingInfestPos = null;
+		pendingInfestedState = null;
+		infestationApplied = false;
+		noPhysics = false;
+		releaseClaimedStone();
 		discard();
+	}
+
+	/** Turns the claimed host into vanilla infested stone. Safe to call more than once. */
+	private void applyPendingInfestation() {
+		if (infestationApplied
+				|| !(level() instanceof ServerLevel serverLevel)
+				|| pendingInfestPos == null
+				|| pendingInfestedState == null) {
+			return;
+		}
+
+		BlockPos pos = pendingInfestPos;
+		BlockState currentState = serverLevel.getBlockState(pos);
+		BlockState infestedState = InfestStoneGoal.infestedStateFor(currentState);
+		if (infestedState == null) {
+			if (currentState.getBlock() instanceof InfestedBlock) {
+				ColonyInfestationData.get(serverLevel).register(pos, serverLevel.getGameTime());
+				infestationApplied = true;
+			}
+			return;
+		}
+
+		serverLevel.setBlock(pos, infestedState, Block.UPDATE_ALL);
+		ColonyInfestationData.get(serverLevel).register(pos, serverLevel.getGameTime());
+		infestationApplied = true;
 	}
 
 	@Override
@@ -347,16 +378,19 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 	/**
 	 * Seeks infestible stone. Adjacent blocks (below / horizontal) are taken immediately;
 	 * farther stones are approached by walking to the open face in front of them.
+	 * Retargets if the larva gets stuck against a wall after hatching.
 	 */
 	private static class InfestStoneGoal extends Goal {
-		private static final int SCAN_RANGE = 6;
+		private static final int SCAN_RANGE = 8;
 		/** Horizontal distance to the stone face that counts as "ready to burrow". */
-		private static final double FACE_REACH = 0.85;
+		private static final double FACE_REACH = 0.95;
+		private static final int STUCK_TICKS_BEFORE_RETARGET = 25;
 
 		private final SilverfishLarvaEntity larva;
 		@Nullable
 		private BurrowTarget target;
 		private int pathRefresh;
+		private int stuckTicks;
 
 		InfestStoneGoal(SilverfishLarvaEntity larva) {
 			this.larva = larva;
@@ -388,6 +422,7 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 		@Override
 		public void start() {
 			pathRefresh = 0;
+			stuckTicks = 0;
 			if (target != null && target.burrowState() == BURROW_FRONT && !isReadyToBurrowFront(target)) {
 				moveToApproach();
 			}
@@ -399,6 +434,7 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 				larva.releaseClaimedStone();
 			}
 			target = null;
+			stuckTicks = 0;
 			larva.getNavigation().stop();
 		}
 
@@ -408,22 +444,21 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 				return;
 			}
 
-			// Constantly prefer an adjacent free stone if one appears.
 			BurrowTarget immediate = findImmediateTarget();
 			if (immediate != null && larva.claimStone(immediate.stonePos())) {
 				target = immediate;
+				stuckTicks = 0;
 			}
 
 			if (!larva.isStoneFree(target.stonePos())) {
-				target = null;
+				retarget();
 				return;
 			}
 
 			BlockState hostState = larva.level().getBlockState(target.stonePos());
 			BlockState infestedState = infestedStateFor(hostState);
 			if (infestedState == null) {
-				larva.releaseClaimedStone();
-				target = null;
+				retarget();
 				return;
 			}
 
@@ -439,22 +474,61 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 				return;
 			}
 
+			boolean navigating = !larva.getNavigation().isDone();
+			if (!navigating || larva.horizontalCollision) {
+				stuckTicks++;
+			} else {
+				stuckTicks = 0;
+			}
+			if (stuckTicks >= STUCK_TICKS_BEFORE_RETARGET) {
+				retarget();
+				return;
+			}
+
 			pathRefresh--;
 			if (pathRefresh <= 0 || larva.getNavigation().isDone()) {
 				moveToApproach();
-				pathRefresh = 10;
+				pathRefresh = 8;
+			}
+		}
+
+		private void retarget() {
+			larva.releaseClaimedStone();
+			BurrowTarget next = findImmediateTarget();
+			if (next == null) {
+				next = findDistantTarget();
+			}
+			if (next != null && larva.claimStone(next.stonePos())) {
+				target = next;
+				stuckTicks = 0;
+				pathRefresh = 0;
+				moveToApproach();
+			} else {
+				target = null;
 			}
 		}
 
 		private void moveToApproach() {
-			if (target == null || target.face() == null) {
+			if (target == null) {
 				return;
 			}
-			// Aim slightly in front of the stone face, not at the stone center.
+			BlockPos approach = target.approachPos();
+			if (target.burrowState() == BURROW_DOWN) {
+				larva.getNavigation().moveTo(approach.getX() + 0.5, approach.getY(), approach.getZ() + 0.5, 1.2);
+				return;
+			}
+			if (target.face() == null) {
+				return;
+			}
 			Direction face = target.face();
-			double x = target.stonePos().getX() + 0.5 - face.getStepX() * 0.75;
-			double z = target.stonePos().getZ() + 0.5 - face.getStepZ() * 0.75;
-			larva.getNavigation().moveTo(x, larva.getY(), z, 1.15);
+			double x = target.stonePos().getX() + 0.5 - face.getStepX() * 0.85;
+			double z = target.stonePos().getZ() + 0.5 - face.getStepZ() * 0.85;
+			larva.getLookControl().setLookAt(
+					target.stonePos().getX() + 0.5,
+					target.stonePos().getY() + 0.5,
+					target.stonePos().getZ() + 0.5
+			);
+			larva.getNavigation().moveTo(x, approach.getY(), z, 1.2);
 		}
 
 		private boolean targetStillValid() {
@@ -472,8 +546,7 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 			}
 
 			BlockPos feet = larva.blockPosition();
-			// Already standing in the cell next to that face.
-			if (feet.equals(stone.relative(face.getOpposite())) && feet.getY() == stone.getY()) {
+			if (feet.equals(stone.relative(face.getOpposite())) && Math.abs(feet.getY() - stone.getY()) <= 1) {
 				return true;
 			}
 
@@ -482,7 +555,7 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 			double dx = larva.getX() - faceX;
 			double dz = larva.getZ() - faceZ;
 			boolean closeToFace = dx * dx + dz * dz <= FACE_REACH * FACE_REACH;
-			boolean sameLevel = Math.abs(larva.getY() - stone.getY()) < 1.1;
+			boolean sameLevel = Math.abs(larva.getY() - stone.getY()) < 1.25;
 			return closeToFace && sameLevel;
 		}
 
@@ -518,18 +591,32 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 			double bestDist = Double.MAX_VALUE;
 			BlockPos.MutableBlockPos stone = new BlockPos.MutableBlockPos();
 
-			for (int dy = -1; dy <= 1; dy++) {
+			for (int dy = -2; dy <= 1; dy++) {
 				for (int dx = -SCAN_RANGE; dx <= SCAN_RANGE; dx++) {
 					for (int dz = -SCAN_RANGE; dz <= SCAN_RANGE; dz++) {
+						if (dx == 0 && dy == 0 && dz == 0) {
+							continue;
+						}
 						stone.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
 						if (infestedStateFor(larva.level().getBlockState(stone)) == null
 								|| !larva.isStoneFree(stone)) {
 							continue;
 						}
 
+						if (dy < 0 && dx == 0 && dz == 0) {
+							BlockPos above = stone.above();
+							if (isOpenApproach(above)) {
+								double dist = larva.distanceToSqr(above.getX() + 0.5, above.getY(), above.getZ() + 0.5);
+								if (dist < bestDist) {
+									bestDist = dist;
+									best = new BurrowTarget(stone.immutable(), above, BURROW_DOWN, null);
+								}
+							}
+						}
+
 						for (Direction face : Direction.Plane.HORIZONTAL) {
 							BlockPos approach = stone.immutable().relative(face.getOpposite());
-							if (approach.getY() != origin.getY() || !isOpenApproach(approach)) {
+							if (!isOpenApproach(approach) || Math.abs(approach.getY() - origin.getY()) > 1) {
 								continue;
 							}
 							double dist = larva.distanceToSqr(
@@ -554,29 +641,10 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 		}
 
 		private static BlockState infestedStateFor(BlockState hostState) {
-			Block host = hostState.getBlock();
-			if (host == Blocks.STONE) {
-				return Blocks.INFESTED_STONE.defaultBlockState();
+			if (!InfestedBlock.isCompatibleHostBlock(hostState)) {
+				return null;
 			}
-			if (host == Blocks.COBBLESTONE) {
-				return Blocks.INFESTED_COBBLESTONE.defaultBlockState();
-			}
-			if (host == Blocks.STONE_BRICKS) {
-				return Blocks.INFESTED_STONE_BRICKS.defaultBlockState();
-			}
-			if (host == Blocks.MOSSY_STONE_BRICKS) {
-				return Blocks.INFESTED_MOSSY_STONE_BRICKS.defaultBlockState();
-			}
-			if (host == Blocks.CRACKED_STONE_BRICKS) {
-				return Blocks.INFESTED_CRACKED_STONE_BRICKS.defaultBlockState();
-			}
-			if (host == Blocks.CHISELED_STONE_BRICKS) {
-				return Blocks.INFESTED_CHISELED_STONE_BRICKS.defaultBlockState();
-			}
-			if (host == Blocks.DEEPSLATE) {
-				return Blocks.INFESTED_DEEPSLATE.defaultBlockState();
-			}
-			return null;
+			return InfestedBlock.infestedStateByHost(hostState);
 		}
 
 		private record BurrowTarget(

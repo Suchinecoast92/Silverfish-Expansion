@@ -2,10 +2,14 @@
 	"item.silverfish-expansion.araneo_silverfish_spawn_egg": "Huevo de pez de plata aráneo",
 	"item.silverfish-expansion.mantis_silverfish_spawn_egg": "Huevo de pez de plata mantis",
 	"item.silverfish-expansion.fly_silverfish_spawn_egg": "Huevo de pez de plata volador",
+	"item.silverfish-expansion.crab_silverfish_spawn_egg": "Huevo de pez de plata cangrejo",
+	"item.silverfish-expansion.queen_silverfish_spawn_egg": "Huevo de pez de plata reina",
 	"item.silverfish-expansion.larva_spawn_egg": "Huevo de larva de pez de plata",
 	"block.silverfish-expansion.silverfish_eggs": "Huevos de pez de plata",
 	"entity.silverfish-expansion.araneo_silverfish": "Pez de plata aráneo",
 	"entity.silverfish-expansion.mantis_silverfish": "Pez de plata mantis",
 	"entity.silverfish-expansion.fly_silverfish": "Pez de plata volador",
+	"entity.silverfish-expansion.crab_silverfish": "Pez de plata cangrejo",
+	"entity.silverfish-expansion.queen_silverfish": "Pez de plata reina",
 	"entity.silverfish-expansion.larva": "Larva de pez de plata"
 }

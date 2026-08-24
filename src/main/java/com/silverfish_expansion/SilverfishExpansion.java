@@ -19,6 +19,7 @@ public class SilverfishExpansion implements ModInitializer {
 	public void onInitialize() {
 		ModBlocks.register();
 		ModEntities.registerAttributes();
+		ModEntities.registerSpawnPlacements();
 		ModItems.register();
 		ModStructures.register();
 		ServerTickEvents.END_WORLD_TICK.register(level -> {

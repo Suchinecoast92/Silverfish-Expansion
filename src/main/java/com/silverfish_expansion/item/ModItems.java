@@ -22,8 +22,15 @@ public final class ModItems {
 			"mantis_silverfish_spawn_egg", ModEntities.MANTIS_SILVERFISH);
 	public static final SpawnEggItem FLY_SILVERFISH_SPAWN_EGG = registerSpawnEgg(
 			"fly_silverfish_spawn_egg", ModEntities.FLY_SILVERFISH);
-	public static final SpawnEggItem LARVA_SPAWN_EGG = registerSpawnEgg(
-			"larva_spawn_egg", ModEntities.LARVA);
+	public static final SpawnEggItem CRAB_SILVERFISH_SPAWN_EGG = registerSpawnEgg(
+			"crab_silverfish_spawn_egg", ModEntities.CRAB_SILVERFISH);
+	public static final SpawnEggItem QUEEN_SILVERFISH_SPAWN_EGG = registerSpawnEgg(
+			"queen_silverfish_spawn_egg", ModEntities.QUEEN_SILVERFISH);
+	public static final LarvaSpawnEggItem LARVA_SPAWN_EGG = register(
+			"larva_spawn_egg",
+			LarvaSpawnEggItem::new,
+			new Item.Properties().spawnEgg(ModEntities.LARVA)
+	);
 
 	private ModItems() {
 	}
@@ -46,6 +53,8 @@ public final class ModItems {
 			itemGroup.accept(ARANEO_SILVERFISH_SPAWN_EGG);
 			itemGroup.accept(MANTIS_SILVERFISH_SPAWN_EGG);
 			itemGroup.accept(FLY_SILVERFISH_SPAWN_EGG);
+			itemGroup.accept(CRAB_SILVERFISH_SPAWN_EGG);
+			itemGroup.accept(QUEEN_SILVERFISH_SPAWN_EGG);
 			itemGroup.accept(LARVA_SPAWN_EGG);
 		});
 		ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.NATURAL_BLOCKS).register(itemGroup -> {

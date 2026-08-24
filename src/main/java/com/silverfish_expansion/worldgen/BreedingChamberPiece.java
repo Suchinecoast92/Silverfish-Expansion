@@ -3,13 +3,19 @@ package com.silverfish_expansion.worldgen;
 import com.silverfish_expansion.block.ModBlocks;
 import com.silverfish_expansion.block.SilverfishEggsBlock;
 import com.silverfish_expansion.colony.ColonyInfestationData;
+import com.silverfish_expansion.entity.ExpandedSilverfishEntity;
+import com.silverfish_expansion.entity.ModEntities;
+import com.silverfish_expansion.entity.SilverfishQueenEntity;
+import com.silverfish_expansion.entity.SilverfishVariant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.WorldGenLevel;
@@ -25,6 +31,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -125,9 +132,118 @@ public class BreedingChamberPiece extends StructurePiece {
 		tag.putInt("CZ", this.center.getZ());
 	}
 
-	/** Widest part of the chamber; where the matriarch will sit once she exists. */
+	/** Widest part of the chamber; one matriarch is placed here during worldgen. */
 	public BlockPos getMatriarchAnchor() {
 		return new BlockPos(Mth.floor(this.layout.anchorX()), this.layout.baseFloorY() + 1, Mth.floor(this.layout.anchorZ()));
+	}
+
+	private static final int COLONY_ADULT_MIN = 3;
+	private static final int COLONY_ADULT_MAX = 12;
+
+	/**
+	 * Places the queen and 3–12 adults. Each structure chunk runs the same seeded
+	 * sequence and only inserts entities whose stand is inside the chunk being
+	 * decorated — never touching neighbour chunks (that deadlocks WorldGenRegion).
+	 */
+	private void trySpawnColonyFauna(WorldGenLevel level, BoundingBox chunkBox) {
+		RandomSource fauna = RandomSource.create(this.seed ^ 0x51F15EEDL);
+		BlockPos anchor = getMatriarchAnchor();
+
+		BlockPos queenPos = findSpawnStandInChunk(level, chunkBox, anchor, 4);
+		if (queenPos != null) {
+			spawnMatriarch(level, queenPos, anchor, fauna);
+		} else {
+			fauna.nextFloat(); // keep adult sequence aligned when this chunk has no queen
+		}
+
+		int adults = COLONY_ADULT_MIN + fauna.nextInt(COLONY_ADULT_MAX - COLONY_ADULT_MIN + 1);
+		for (int i = 0; i < adults; i++) {
+			int dx;
+			int dz;
+			do {
+				dx = fauna.nextInt(29) - 14;
+				dz = fauna.nextInt(29) - 14;
+			} while (dx * dx + dz * dz < 9);
+			int variantPick = fauna.nextInt(SilverfishVariant.values().length);
+			float yaw = fauna.nextFloat() * 360.0F;
+			BlockPos probe = anchor.offset(dx, 0, dz);
+			BlockPos stand = findSpawnStandInChunk(level, chunkBox, probe, 3);
+			if (stand != null) {
+				spawnColonyAdult(level, stand, SilverfishVariant.values()[variantPick], yaw);
+			}
+		}
+	}
+
+	@Nullable
+	private BlockPos findSpawnStandInChunk(WorldGenLevel level, BoundingBox chunkBox, BlockPos near, int radius) {
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		for (int r = 0; r <= radius; r++) {
+			for (int dy = -2; dy <= 2; dy++) {
+				for (int dx = -r; dx <= r; dx++) {
+					for (int dz = -r; dz <= r; dz++) {
+						if (r > 0 && Math.abs(dx) != r && Math.abs(dz) != r) {
+							continue;
+						}
+						cursor.set(near.getX() + dx, near.getY() + dy, near.getZ() + dz);
+						if (!chunkBox.isInside(cursor)) {
+							continue;
+						}
+						if (isValidSpawnStand(level, cursor)) {
+							return cursor.immutable();
+						}
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	private static boolean isValidSpawnStand(WorldGenLevel level, BlockPos pos) {
+		if (!canAccess(level, pos) || !canAccess(level, pos.above()) || !canAccess(level, pos.below())) {
+			return false;
+		}
+		if (!level.getBlockState(pos).isAir() || !level.getBlockState(pos.above()).isAir()) {
+			return false;
+		}
+		BlockPos floor = pos.below();
+		BlockState floorState = level.getBlockState(floor);
+		return floorState.isFaceSturdy(level, floor, Direction.UP);
+	}
+
+	/**
+	 * WorldGenRegion only exposes nearby chunks. Reading outside throws
+	 * {@code Requested chunk unavailable during world generation}.
+	 */
+	private static boolean canAccess(WorldGenLevel level, BlockPos pos) {
+		return canAccess(level, pos.getX(), pos.getY(), pos.getZ());
+	}
+
+	private static boolean canAccess(WorldGenLevel level, int x, int y, int z) {
+		if (y < level.getMinY() || y > level.getMaxY()) {
+			return false;
+		}
+		return level.hasChunk(SectionPos.blockToSectionCoord(x), SectionPos.blockToSectionCoord(z));
+	}
+
+	private void spawnMatriarch(WorldGenLevel level, BlockPos stand, BlockPos home, RandomSource random) {
+		SilverfishQueenEntity queen = ModEntities.QUEEN_SILVERFISH.create(level.getLevel(), EntitySpawnReason.STRUCTURE);
+		if (queen == null) {
+			return;
+		}
+		queen.snapTo(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5, random.nextFloat() * 360.0F, 0.0F);
+		queen.setPersistenceRequired();
+		queen.setColonyHome(home);
+		level.addFreshEntity(queen);
+	}
+
+	private void spawnColonyAdult(WorldGenLevel level, BlockPos stand, SilverfishVariant variant, float yaw) {
+		ExpandedSilverfishEntity adult = ModEntities.typeFor(variant).create(level.getLevel(), EntitySpawnReason.STRUCTURE);
+		if (adult == null) {
+			return;
+		}
+		adult.snapTo(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5, yaw, 0.0F);
+		adult.setPersistenceRequired();
+		level.addFreshEntity(adult);
 	}
 
 	// ------------------------------------------------------------------
@@ -359,6 +475,7 @@ public class BreedingChamberPiece extends StructurePiece {
 		placeTerrain(level, grid, cursor, minX, minY, minZ, maxX, maxY, maxZ);
 		connectTunnelsToCaves(level, chunkBox, cursor);
 		placeDecoration(level, grid, cursor, probe, minX, minY, minZ, maxX, maxY, maxZ);
+		trySpawnColonyFauna(level, chunkBox);
 	}
 
 	/**
@@ -413,6 +530,9 @@ public class BreedingChamberPiece extends StructurePiece {
 						if (by < worldMinY || by > worldMaxY || isOurCavity(bx, by, bz)) {
 							continue;
 						}
+						if (!canAccess(level, bx, by, bz)) {
+							continue;
+						}
 						cursor.set(bx, by, bz);
 						if (level.getBlockState(cursor).isAir()) {
 							return step;
@@ -458,6 +578,9 @@ public class BreedingChamberPiece extends StructurePiece {
 						int by = Mth.floor(y) + dy;
 						int bz = Mth.floor(z) + dz;
 						if (by < worldMinY || by > worldMaxY || !chunkBox.isInside(bx, by, bz) || isOurCavity(bx, by, bz)) {
+							continue;
+						}
+						if (!canAccess(level, bx, by, bz)) {
 							continue;
 						}
 						cursor.set(bx, by, bz);
@@ -889,9 +1012,10 @@ public class BreedingChamberPiece extends StructurePiece {
 		}
 
 		// Clusters thin out as they get further from the matriarch's ground.
+		// Pick rate ~0.079 ≈ +15% vs previous 0.069.
 		double closeness = Mth.clamp(1.0 - (distance - 4.0) / 18.0, 0.0, 1.0);
 		float threshold = 0.72F - (float) (closeness * 0.22);
-		if (valueNoise3D(x, y, z, SALT_EGG_MASK, 7) <= threshold || posRand(x, y, z, SALT_EGG_PICK) >= 0.06F) {
+		if (valueNoise3D(x, y, z, SALT_EGG_MASK, 7) <= threshold || posRand(x, y, z, SALT_EGG_PICK) >= 0.079F) {
 			return false;
 		}
 

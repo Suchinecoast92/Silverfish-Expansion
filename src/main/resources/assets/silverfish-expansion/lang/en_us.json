@@ -2,10 +2,14 @@
 	"item.silverfish-expansion.araneo_silverfish_spawn_egg": "Araneo Silverfish Spawn Egg",
 	"item.silverfish-expansion.mantis_silverfish_spawn_egg": "Mantis Silverfish Spawn Egg",
 	"item.silverfish-expansion.fly_silverfish_spawn_egg": "Fly Silverfish Spawn Egg",
+	"item.silverfish-expansion.crab_silverfish_spawn_egg": "Crab Silverfish Spawn Egg",
+	"item.silverfish-expansion.queen_silverfish_spawn_egg": "Queen Silverfish Spawn Egg",
 	"item.silverfish-expansion.larva_spawn_egg": "Silverfish Larva Spawn Egg",
 	"block.silverfish-expansion.silverfish_eggs": "Silverfish Eggs",
 	"entity.silverfish-expansion.araneo_silverfish": "Araneo Silverfish",
 	"entity.silverfish-expansion.mantis_silverfish": "Mantis Silverfish",
 	"entity.silverfish-expansion.fly_silverfish": "Fly Silverfish",
+	"entity.silverfish-expansion.crab_silverfish": "Crab Silverfish",
+	"entity.silverfish-expansion.queen_silverfish": "Queen Silverfish",
 	"entity.silverfish-expansion.larva": "Silverfish Larva"
 }

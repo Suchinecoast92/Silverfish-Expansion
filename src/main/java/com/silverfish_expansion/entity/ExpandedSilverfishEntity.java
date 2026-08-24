@@ -1,6 +1,18 @@
 package com.silverfish_expansion.entity;
 
+import com.nyfaria.awcapi.ClimberHelper;
+import com.nyfaria.awcapi.entity.ClimberComponent;
+import com.nyfaria.awcapi.entity.IAdvancedClimber;
+import com.nyfaria.awcapi.entity.movement.ClimberJumpController;
+import com.nyfaria.awcapi.entity.movement.ClimberLookController;
+import com.nyfaria.awcapi.entity.movement.ClimberMoveController;
+import com.silverfish_expansion.entity.ai.CuriousSilverfishLookGoal;
+import com.silverfish_expansion.entity.ai.ErraticSilverfishWanderGoal;
+import com.silverfish_expansion.entity.ai.FlySilverfishAttackGoal;
+import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.Vec3i;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -9,6 +21,9 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
@@ -16,12 +31,18 @@ import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
+import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.pathfinder.Node;
+import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.Vec3;
-import com.silverfish_expansion.entity.ai.CuriousSilverfishLookGoal;
-import com.silverfish_expansion.entity.ai.ErraticSilverfishWanderGoal;
+import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.animatable.manager.AnimatableManager;
@@ -31,7 +52,7 @@ import software.bernie.geckolib.animation.object.PlayState;
 import software.bernie.geckolib.animation.state.AnimationTest;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
-public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
+public class ExpandedSilverfishEntity extends Monster implements GeoEntity, IAdvancedClimber {
 	/** 0 = ground, 1 = flying, 2 = approach ground, 3 = landing (stopFlying). */
 	private static final EntityDataAccessor<Byte> DATA_FLIGHT_STATE =
 			SynchedEntityData.defineId(ExpandedSilverfishEntity.class, EntityDataSerializers.BYTE);
@@ -86,16 +107,22 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 
 	private final SilverfishVariant variant;
 	private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
+	private final ClimberComponent climber = new ClimberComponent(this);
 
 	private int flyTicks;
 	private int flyCooldown;
 	private int landingTicks;
 	private boolean wasServerMoving;
 	private final double[] walkHistoryX = new double[WALK_WINDOW_TICKS];
+	private final double[] walkHistoryY = new double[WALK_WINDOW_TICKS];
 	private final double[] walkHistoryZ = new double[WALK_WINDOW_TICKS];
 	private int walkHistoryIndex;
 	private int walkHistoryCount;
 	private int walkGrace;
+	private double lerpXRot;
+	private double lerpYRot;
+	private double lerpYHeadRot;
+	private int lerpHeadSteps;
 
 	private Vec3 flightWanderTarget = Vec3.ZERO;
 	private int flightRetargetTicks;
@@ -103,6 +130,16 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 	public ExpandedSilverfishEntity(SilverfishVariant variant, EntityType<? extends ExpandedSilverfishEntity> type, Level level) {
 		super(type, level);
 		this.variant = variant;
+		if (usesWallClimbing()) {
+			this.moveControl = new ClimberMoveController<>(this);
+			this.lookControl = new ClimberLookController<>(this);
+			this.jumpControl = new ClimberJumpController<>(this);
+			SilverfishClimber.initStepHeight(this);
+		}
+	}
+
+	public boolean usesWallClimbing() {
+		return SilverfishClimber.usesWallClimbing(this);
 	}
 
 	public SilverfishVariant getVariant() {
@@ -259,15 +296,42 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 	}
 
 	@Override
+	protected PathNavigation createNavigation(Level level) {
+		if (!SilverfishClimber.usesWallClimbing(this)) {
+			return super.createNavigation(level);
+		}
+		return SilverfishClimber.createNavigation(this, level);
+	}
+
+	@Override
 	protected void registerGoals() {
 		goalSelector.addGoal(0, new FloatGoal(this));
-		goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.0, false));
-		// Nervous short hops + curious pauses; Fly only while grounded.
+		if (variant == SilverfishVariant.FLY) {
+			goalSelector.addGoal(2, new FlySilverfishAttackGoal(this));
+		} else {
+			goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.0, false));
+		}
+		// Nervous short hops + curious pauses; Fly only while grounded and not chasing.
 		goalSelector.addGoal(5, new ErraticSilverfishWanderGoal(this, 0.95, this::canWanderOnGround));
 		goalSelector.addGoal(6, new CuriousSilverfishLookGoal(this, this::canWanderOnGround));
 		goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 		targetSelector.addGoal(1, new HurtByTargetGoal(this));
+	}
+
+	/** Fly variant should stay airborne while it has a living target. */
+	public boolean wantsAerialChase() {
+		return getVariant() == SilverfishVariant.FLY;
+	}
+
+	public void requestCombatTakeoff() {
+		if (getVariant() != SilverfishVariant.FLY || isFlying() || isLanding()) {
+			return;
+		}
+		if (hasTakeoffClearance()) {
+			setFlying(true);
+			flyCooldown = 0;
+		}
 	}
 
 	private boolean canWanderOnGround() {
@@ -277,6 +341,9 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 	@Override
 	public void tick() {
 		super.tick();
+		if (usesWallClimbing()) {
+			ClimberHelper.tickClimber(this);
+		}
 		if (getVariant() == SilverfishVariant.FLY) {
 			fallDistance = 0.0F;
 		}
@@ -308,6 +375,11 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 
 		setNoGravity(false);
 
+		if (getTarget() != null && getTarget().isAlive() && hasTakeoffClearance()) {
+			setFlying(true);
+			return;
+		}
+
 		if (flyCooldown > 0) {
 			flyCooldown--;
 			return;
@@ -335,16 +407,18 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 
 		boolean windowReady = walkHistoryCount >= WALK_WINDOW_TICKS;
 		double netX = getX() - walkHistoryX[walkHistoryIndex];
+		double netY = getY() - walkHistoryY[walkHistoryIndex];
 		double netZ = getZ() - walkHistoryZ[walkHistoryIndex];
 
 		walkHistoryX[walkHistoryIndex] = getX();
+		walkHistoryY[walkHistoryIndex] = getY();
 		walkHistoryZ[walkHistoryIndex] = getZ();
 		walkHistoryIndex = (walkHistoryIndex + 1) % WALK_WINDOW_TICKS;
 		if (!windowReady) {
 			walkHistoryCount++;
 		}
 
-		double netSqr = netX * netX + netZ * netZ;
+		double netSqr = netX * netX + netY * netY + netZ * netZ;
 		if (windowReady && netSqr > 4.0) {
 			// Faster than this mob can ever walk: teleport or dimension move, not a step
 			resetWalkTracking();
@@ -455,14 +529,79 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 			}
 			setDeltaMovement(motion.x * 0.96, lift, motion.z * 0.96);
 		} else {
-			// Phase 2 — free erratic flight (flying loop)
+			// Phase 2 — chase the attacker or wander like a bee
 			setNoGravity(true);
-			tickErraticFlight();
+			if (getTarget() != null && getTarget().isAlive()) {
+				tickChaseFlight();
+			} else {
+				tickErraticFlight();
+			}
 		}
 
+		boolean chasing = getTarget() != null && getTarget().isAlive();
 		int flightLimit = MIN_FLIGHT_TICKS + random.nextInt(MAX_FLIGHT_TICKS - MIN_FLIGHT_TICKS + 1);
-		if (flyTicks >= flightLimit) {
+		if (!chasing && flyTicks >= flightLimit) {
 			setFlying(false);
+		}
+	}
+
+	/**
+	 * Bee-like pursuit: dart toward the target's upper body, stay off the floor,
+	 * and keep cave headroom so the hive ceiling is not punched through.
+	 */
+	private void tickChaseFlight() {
+		LivingEntity target = getTarget();
+		if (target == null) {
+			return;
+		}
+
+		double hoverY = target.getY() + Math.max(0.25, target.getBbHeight() * 0.35);
+		double floorY = localFloorY(target.getX(), hoverY, target.getZ());
+		double ceilingY = localCeilingY(target.getX(), hoverY, target.getZ());
+		double maxY = ceilingY - getBbHeight() - 0.15;
+		double minY = floorY + 0.35;
+		if (maxY > minY) {
+			hoverY = Mth.clamp(hoverY, minY, maxY);
+		}
+
+		Vec3 desiredPos = new Vec3(target.getX(), hoverY, target.getZ());
+		Vec3 toTarget = desiredPos.subtract(position());
+		double dist = toTarget.length();
+		if (dist < 0.001) {
+			return;
+		}
+
+		Vec3 dir = toTarget.scale(1.0 / dist);
+		dir = dir.add(
+				(random.nextDouble() - 0.5) * 0.18,
+				(random.nextDouble() - 0.5) * 0.10,
+				(random.nextDouble() - 0.5) * 0.18
+		).normalize();
+
+		double speed = dist < 2.0 ? 0.18 : 0.26;
+		Vec3 desired = dir.scale(speed);
+		Vec3 motion = getDeltaMovement();
+		double headroom = availableHeadroom();
+		if (headroom < MIN_FLIGHT_HEADROOM) {
+			desired = new Vec3(desired.x, Math.min(desired.y, -0.05), desired.z);
+		}
+		if (!hasCollisionFreeOffset(desired.x, desired.y, desired.z)) {
+			Vec3 fallback = new Vec3(desired.x * 0.35, Math.min(desired.y, -0.04), desired.z * 0.35);
+			desired = hasCollisionFreeOffset(fallback.x, fallback.y, fallback.z)
+					? fallback
+					: new Vec3(-motion.x * 0.25, -0.04, -motion.z * 0.25);
+		}
+
+		setDeltaMovement(
+				Mth.lerp(0.42, motion.x, desired.x),
+				Mth.lerp(0.42, motion.y, desired.y),
+				Mth.lerp(0.42, motion.z, desired.z)
+		);
+
+		if (desired.horizontalDistanceSqr() > 1.0E-4) {
+			float yaw = (float) (Mth.atan2(desired.z, desired.x) * (180.0 / Math.PI)) - 90.0F;
+			setYRot(Mth.rotLerp(0.45F, getYRot(), yaw));
+			yBodyRot = getYRot();
 		}
 	}
 
@@ -561,8 +700,154 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 	}
 
 	@Override
+	public void aiStep() {
+		if (usesWallClimbing()) {
+			ClimberHelper.livingTickClimber(this);
+		}
+		super.aiStep();
+	}
+
+	@Override
+	public void travel(Vec3 travelVector) {
+		if (usesWallClimbing() && ClimberHelper.handleTravel(this, travelVector)) {
+			ClimberHelper.postTravel(this, travelVector);
+			return;
+		}
+		super.travel(travelVector);
+		if (usesWallClimbing()) {
+			ClimberHelper.postTravel(this, travelVector);
+		}
+	}
+
+	@Override
+	public void move(MoverType type, Vec3 movement) {
+		if (usesWallClimbing()) {
+			ClimberHelper.handleMove(this, type, movement, true);
+		}
+		super.move(type, movement);
+		if (usesWallClimbing()) {
+			ClimberHelper.handleMove(this, type, movement, false);
+		}
+	}
+
+	@Override
+	public void jumpFromGround() {
+		if (usesWallClimbing() && ClimberHelper.handleJump(this)) {
+			return;
+		}
+		super.jumpFromGround();
+	}
+
+	@Override
+	public BlockPos getOnPos() {
+		BlockPos pos = super.getOnPos();
+		return usesWallClimbing() ? ClimberHelper.getAdjustedOnPosition(this, pos) : pos;
+	}
+
+	@Override
+	public void lookAt(EntityAnchorArgument.Anchor anchor, Vec3 target) {
+		if (usesWallClimbing()) {
+			Vec3 dir = getOrientation().getLocal(target.subtract(position()));
+			super.lookAt(anchor, position().add(dir));
+			return;
+		}
+		super.lookAt(anchor, target);
+	}
+
+	@Override
+	public boolean onClimbable() {
+		return usesWallClimbing() ? false : super.onClimbable();
+	}
+
+	@Override
+	protected void addAdditionalSaveData(ValueOutput output) {
+		super.addAdditionalSaveData(output);
+		if (usesWallClimbing()) {
+			climber.writeToNbt(output);
+		}
+	}
+
+	@Override
+	protected void readAdditionalSaveData(ValueInput input) {
+		super.readAdditionalSaveData(input);
+		if (usesWallClimbing()) {
+			climber.readFromNbt(input);
+		}
+	}
+
+	@Override
+	public ClimberComponent getClimberComponent() {
+		return climber;
+	}
+
+	@Override
+	public Mob asMob() {
+		return this;
+	}
+
+	@Override
+	public float getMovementSpeed() {
+		return (float) getAttributeValue(Attributes.MOVEMENT_SPEED);
+	}
+
+	@Override
+	public float getBlockSlipperiness(BlockPos pos) {
+		return SilverfishClimber.blockSlipperiness(this, pos);
+	}
+
+	@Override
+	public boolean canClimbOnBlock(BlockState state, BlockPos pos) {
+		return usesWallClimbing() && SilverfishClimber.canClimbOnBlock(this, state, pos);
+	}
+
+	@Override
+	public Direction getGroundSide() {
+		return climber.getGroundSide();
+	}
+
+	@Override
+	public float getBridgePathingMalus(Mob entity, BlockPos pos, @Nullable Node fallPathPoint) {
+		return SilverfishClimber.bridgePathingMalus(entity, pos, fallPathPoint);
+	}
+
+	@Override
+	public float getPathingMalus(
+			BlockGetter cache,
+			Mob entity,
+			PathType nodeType,
+			BlockPos pos,
+			Vec3i direction,
+			java.util.function.Predicate<Direction> sides
+	) {
+		return SilverfishClimber.pathingMalus(this, cache, entity, nodeType, pos, direction, sides);
+	}
+
+	@Override
+	public void setLerpYRot(Float yRot) {
+		this.lerpYRot = yRot != null ? yRot.doubleValue() : 0.0;
+	}
+
+	@Override
+	public void setLerpXRot(Float xRot) {
+		this.lerpXRot = xRot != null ? xRot.doubleValue() : 0.0;
+	}
+
+	@Override
+	public void setLerpYHeadRot(Float yHeadRot) {
+		this.lerpYHeadRot = yHeadRot != null ? yHeadRot.doubleValue() : 0.0;
+	}
+
+	@Override
+	public void setLerpHeadSteps(int steps) {
+		this.lerpHeadSteps = steps;
+	}
+
+	@Override
 	public boolean causeFallDamage(double fallDistance, float damageMultiplier, DamageSource damageSource) {
 		if (getVariant() == SilverfishVariant.FLY) {
+			return false;
+		}
+		if (usesWallClimbing() && climber.getGroundSide() != Direction.DOWN) {
 			return false;
 		}
 		return super.causeFallDamage(fallDistance, damageMultiplier, damageSource);

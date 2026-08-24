@@ -1,5 +1,6 @@
 package com.silverfish_expansion.colony;
 
+import com.silverfish_expansion.entity.LarvaSpawner;
 import com.silverfish_expansion.entity.ModEntities;
 import com.silverfish_expansion.entity.SilverfishVariant;
 import net.minecraft.core.BlockPos;
@@ -18,18 +19,18 @@ public final class ColonyInfestationSpawner {
 
 	public static void spawn(ServerLevel level, BlockPos pos, ColonyInfestationData.Maturity maturity) {
 		switch (maturity) {
-			case LARVA -> spawnEntity(level, pos, ModEntities.LARVA.create(level, EntitySpawnReason.TRIGGERED));
+			case LARVA -> {
+				if (LarvaSpawner.spawnAt(level, pos) == null) {
+					return;
+				}
+			}
 			case JUVENILE -> {
 				Silverfish silverfish = EntityType.SILVERFISH.create(level, EntitySpawnReason.TRIGGERED);
 				spawnEntity(level, pos, silverfish);
 			}
 			case ADULT -> {
 				SilverfishVariant variant = SilverfishVariant.values()[level.random.nextInt(SilverfishVariant.values().length)];
-				EntityType<?> type = switch (variant) {
-					case ARANEO -> ModEntities.ARANEO_SILVERFISH;
-					case MANTIS -> ModEntities.MANTIS_SILVERFISH;
-					case FLY -> ModEntities.FLY_SILVERFISH;
-				};
+				EntityType<?> type = ModEntities.typeFor(variant);
 				spawnEntity(level, pos, type.create(level, EntitySpawnReason.TRIGGERED));
 			}
 		}

@@ -7,7 +7,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Silverfish;
@@ -34,8 +33,10 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 import com.silverfish_expansion.entity.ExpandedSilverfishEntity;
-import com.silverfish_expansion.entity.ModEntities;
+import com.silverfish_expansion.entity.LarvaSpawner;
 import com.silverfish_expansion.entity.SilverfishLarvaEntity;
+import com.silverfish_expansion.entity.SilverfishQueenEntity;
+import com.silverfish_expansion.colony.ColonyPresence;
 
 /**
  * Stackable silverfish egg cluster (1–4) attachable to floor, walls, and ceiling.
@@ -47,6 +48,8 @@ public class SilverfishEggsBlock extends Block {
 	public static final int MAX_EGGS = 4;
 	private static final float LARVA_SPAWN_CHANCE = 0.6F;
 	public static final IntegerProperty EGGS = IntegerProperty.create("eggs", 1, MAX_EGGS);
+	/** 0–2 crack stages before one egg hatches (turtle-egg style). */
+	public static final IntegerProperty HATCH = BlockStateProperties.HATCH;
 	/** Direction the eggs grow away from the support (like amethyst). */
 	public static final EnumProperty<Direction> FACING = BlockStateProperties.FACING;
 
@@ -73,7 +76,10 @@ public class SilverfishEggsBlock extends Block {
 
 	public SilverfishEggsBlock(Properties properties) {
 		super(properties);
-		registerDefaultState(stateDefinition.any().setValue(EGGS, 1).setValue(FACING, Direction.UP));
+		registerDefaultState(stateDefinition.any()
+				.setValue(EGGS, 1)
+				.setValue(HATCH, 0)
+				.setValue(FACING, Direction.UP));
 	}
 
 	@Override
@@ -83,7 +89,7 @@ public class SilverfishEggsBlock extends Block {
 
 	@Override
 	protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-		builder.add(EGGS, FACING);
+		builder.add(EGGS, HATCH, FACING);
 	}
 
 	@Override
@@ -129,6 +135,7 @@ public class SilverfishEggsBlock extends Block {
 	private static boolean isColonyMember(Entity entity) {
 		return entity instanceof SilverfishLarvaEntity
 				|| entity instanceof ExpandedSilverfishEntity
+				|| entity instanceof SilverfishQueenEntity
 				|| entity instanceof Silverfish;
 	}
 
@@ -209,6 +216,7 @@ public class SilverfishEggsBlock extends Block {
 		if (entity instanceof ItemEntity
 				|| entity instanceof SilverfishLarvaEntity
 				|| entity instanceof ExpandedSilverfishEntity
+				|| entity instanceof SilverfishQueenEntity
 				|| entity instanceof Silverfish) {
 			return false;
 		}
@@ -242,16 +250,56 @@ public class SilverfishEggsBlock extends Block {
 		if (serverLevel.random.nextFloat() >= LARVA_SPAWN_CHANCE) {
 			return;
 		}
-		SilverfishLarvaEntity larva = ModEntities.LARVA.create(serverLevel, EntitySpawnReason.TRIGGERED);
-		if (larva != null) {
-			larva.snapTo(
-					pos.getX() + 0.5,
-					pos.getY() + 0.1,
-					pos.getZ() + 0.5,
-					serverLevel.random.nextFloat() * 360.0F,
-					0.0F
+		LarvaSpawner.spawnAt(serverLevel, pos);
+	}
+
+	/**
+	 * Natural colony hatch: crack stages then release one larva from the cluster
+	 * (faster than turtle eggs — minutes, not days).
+	 */
+	@Override
+	protected void randomTick(BlockState state, ServerLevel level, BlockPos pos, net.minecraft.util.RandomSource random) {
+		if (!ColonyPresence.canHatchLarva(level, pos)) {
+			return;
+		}
+		// ~33% chance to progress each random tick → hatch over several minutes (turtle-like, faster).
+		if (random.nextInt(3) != 0) {
+			return;
+		}
+
+		int hatch = state.getValue(HATCH);
+		if (hatch < 2) {
+			level.playSound(
+					null,
+					pos,
+					SoundEvents.TURTLE_EGG_CRACK,
+					SoundSource.BLOCKS,
+					0.7F,
+					0.9F + random.nextFloat() * 0.2F
 			);
-			serverLevel.addFreshEntity(larva);
+			level.setBlock(pos, state.setValue(HATCH, hatch + 1), Block.UPDATE_CLIENTS);
+			return;
+		}
+
+		hatchOneEgg(level, pos, state);
+	}
+
+	private void hatchOneEgg(ServerLevel level, BlockPos pos, BlockState state) {
+		int eggs = state.getValue(EGGS);
+		LarvaSpawner.spawnAt(level, pos);
+		level.playSound(
+				null,
+				pos,
+				SoundEvents.TURTLE_EGG_HATCH,
+				SoundSource.BLOCKS,
+				0.7F,
+				0.9F + level.random.nextFloat() * 0.2F
+		);
+
+		if (eggs <= 1) {
+			level.removeBlock(pos, false);
+		} else {
+			level.setBlock(pos, state.setValue(EGGS, eggs - 1).setValue(HATCH, 0), Block.UPDATE_ALL);
 		}
 	}
 
@@ -279,6 +327,7 @@ public class SilverfishEggsBlock extends Block {
 				.strength(0.5F)
 				.sound(SOUND_TYPE)
 				.noOcclusion()
+				.randomTicks()
 				// Not "solid" for AI checks: random wander targets otherwise get pushed
 				// one block above the eggs, making mobs jump to reach them.
 				.forceSolidOff()

@@ -6,7 +6,8 @@ import com.silverfish_expansion.SilverfishExpansion;
 public enum SilverfishVariant {
 	ARANEO("araneo_silverfish"),
 	MANTIS("mantis_silverfish"),
-	FLY("fly_silverfish");
+	FLY("fly_silverfish"),
+	CRAB("crab_silverfish");
 
 	private final String id;
 
