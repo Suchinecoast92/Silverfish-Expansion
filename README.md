@@ -1,6 +1,6 @@
 # Silverfish Expansion
 
-Mod de **Fabric** para Minecraft **1.21.11** que añade variantes animadas de silverfish con **GeckoLib**, trepar por **AWCAPI** y un sistema de **colonia**.
+Mod de **Fabric** para Minecraft **1.21.11** que añade variantes animadas de silverfish con **GeckoLib** y un sistema de **colonia**.
 
 Ciclo de vida:
 
@@ -11,7 +11,7 @@ Ciclo de vida:
 | Contenido | Estado |
 |-----------|--------|
 | Adultos Araneo / Mantis / Fly / Crab | Completo |
-| Trepar paredes y techos (AWCAPI) | Completo (terrestres + reina) |
+| Trepar paredes (como araña vanilla) | Completo (terrestres + reina) |
 | Deambulación errática / curiosa | Completo |
 | Huevos amontonables | Completo |
 | Eclosión natural de huevos | Completo |
@@ -20,23 +20,23 @@ Ciclo de vida:
 | Cámara de cría (worldgen) | Completo |
 | Matriarca / Reina | Completo (puesta + alerta; decadencia sin ella) |
 | Iconos de creativo | Completo |
-| Spawns naturales fuera de la cámara | Pendiente |
+| Spawns leves de rastro en cuevas | Completo |
 
 ## Variantes adultas
 
-| Variante | ID de entidad | Notas |
-|----------|---------------|--------|
-| Araneo Silverfish | `araneo_silverfish` | Terrestre; trepa paredes y techos |
-| Mantis Silverfish | `mantis_silverfish` | Terrestre; trepa paredes y techos |
-| Fly Silverfish | `fly_silverfish` | Vuela a baja altura; persigue en el aire |
-| Crab Silverfish | `crab_silverfish` | Terrestre; trepa paredes y techos |
-| Queen Silverfish | `queen_silverfish` | Matriarca; trepa más lenta |
+| Variante | ID de entidad | Stats / notas |
+|----------|---------------|----------------|
+| Araneo Silverfish | `araneo_silverfish` | 8 HP, daño 2, vel. 0.28. Terrestre; trepa. El punto medio. |
+| Mantis Silverfish | `mantis_silverfish` | 7 HP, daño 3, vel. 0.30. Más daño. |
+| Fly Silverfish | `fly_silverfish` | 5 HP, daño 1.5, vel. 0.36. Frágil y rápido; persigue en el aire. |
+| Crab Silverfish | `crab_silverfish` | 14 HP, daño 2, vel. 0.22, armadura 3. Más aguante. |
+| Queen Silverfish | `queen_silverfish` | 20 HP, vel. 0.22, escala 1.5. No ataca; huye al herirla. Pone huevos. |
 
 ### Animaciones
 
 | Animación | Quién | Cuándo |
 |-----------|-------|--------|
-| `walk` | Adultos y reina | Solo al desplazarse de verdad (también en muros/techos) |
+| `walk` | Adultos y reina | Solo al desplazarse de verdad |
 | `none` | Adultos y reina | Pose neutra al detenerse |
 | `idle` / `idle2` | Adultos y reina | Idle ocasional (~35 %), una vez, luego `none` |
 | `idle3` | Fly y reina | Igual que los otros idles |
@@ -48,7 +48,9 @@ Ciclo de vida:
 
 - **Deambulación errática**: trayectos cortos, cambios de rumbo, pausas “curiosas” y velocidad variable (terrestres y reina; Fly solo en suelo).
 - **Mirada curiosa**: giros de cabeza ocasionales.
-- **Trepar (AWCAPI)**: Araneo, Mantis, Crab y la reina caminan por paredes y techos. El modelo se orienta a la superficie. El Fly y la larva no trepan.
+- **Trepar**: Araneo, Mantis, Crab y la reina trepan paredes como las arañas vanilla (siguen derechas; no se pegan al techo). El Fly y la larva no trepan.
+- **Alerta de colonia**: si hieren a un adulto o a la reina, los aliados cercanos (adultos y silverfish vanilla) se vuelven contra el atacante. La reina no pelea: huye.
+- **Puesta**: la reina se clava, reproduce `putEgg` y deja un huevo detrás. Condiciones y topes más abajo.
 - **Fly**: vuelo local respecto al suelo/techo cercano (sin atravesar techos ni despegar en techos bajos). Si tiene objetivo, lo persigue en el aire con alcance de melee del silverfish vanilla + 10 %.
 
 ## Huevos
@@ -108,11 +110,27 @@ Piedra / deepslate dominante, con manchas raras y **bordes ruidosos** de:
 
 ### Fauna en la cámara
 
-Al generar la estructura aparecen **1 Matriarca** y **3–12 adultos** (no cuenta la reina), repartidos por los chunks de la cámara. No hay spawns de colonia en biomas fuera de la estructura.
+Al generar la estructura aparecen **1 Matriarca** y **3–12 adultos** (no cuenta la reina), repartidos por los chunks de la cámara.
 
-La reina se queda cerca de su ancla, pone huevos periódicamente (animación `putEgg`) y, al recibir daño, alerta a la colonia cercana. Si muere, deja de haber puestas nuevas; los huevos ya colocados siguen eclosionando. El silverfish vanilla sigue saliendo al romper piedra infestada. Las piedras infestadas de la cámara están “maduras”: al romperlas sale un adulto.
+Fuera de la cámara hay **spawns leves** de adultos en cuevas oscuras (aprox. y=-54 a y=24, máximo 3 en 40 bloques). No hay reina salvaje. Sirven de rastro: el jugador nota que “aquí hay algo más” y, explorando, llega al nido.
+
+La reina se queda cerca de su ancla y pone huevos periódicamente. Si la hieren, huye y alerta a la colonia; ella no ataca. Si muere, deja de haber puestas nuevas; los huevos ya colocados siguen eclosionando. El silverfish vanilla sigue saliendo al romper piedra infestada. Las piedras infestadas de la cámara están “maduras”: al romperlas sale un adulto.
 
 Hay un tope blando de combatientes cerca de la colonia (~14) para que no se sature.
+
+### Puesta de la reina
+
+Cada ciclo coloca **un huevo** (cluster nuevo, o +1 si ya hay uno detrás con menos de 4). No suelta varios de un solo `putEgg`.
+
+Para empezar sola hace falta todo esto a la vez:
+
+- reina viva, no herida en ~4 s y no poniendo ya
+- cooldown a 0 (~1–2 min al aparecer; ~2–4 min tras una puesta; ~30–50 s si no halló sitio)
+- menos de **10 clusters** en 12 bloques del hogar
+- menos de **14 combatientes** (adultos + silverfish vanilla) en 48 bloques
+- tirada de ~5 % cada tick
+
+Al arrancar se queda **quieta**: misma posición y rotación durante `putEgg` (~6 s). El huevo sale **justo detrás de la cola**, en el suelo. Si la golpean a mitad, aborta y no pone nada.
 
 ### Huevos (eclosión)
 
@@ -123,12 +141,11 @@ Además de aplastar/romper: los huevos hacen **tick aleatorio**, agrietan (como 
 | Pieza | Rol |
 |-------|-----|
 | **Balance fino** | Frecuencia/cantidad de puestas y eclosión |
-| **Spawns naturales** | Colonia / adultos en cuevas fuera de la estructura |
 
 ## En el juego
 
 - Spawn eggs de adultos, reina y larva, más el ítem de huevos, en creativo.
-- Dependencias: **Fabric API**, **GeckoLib** y **Advanced Wall Climber API (AWCAPI)**. En un launcher hay que poner también el jar de AWCAPI.
+- Dependencias: **Fabric API** y **GeckoLib**.
 - Idiomas: inglés (`en_us`) y español México (`es_mx`).
 
 ## Requisitos
@@ -139,7 +156,6 @@ Además de aplastar/romper: los huevos hacen **tick aleatorio**, agrietan (como 
 | Fabric Loader | ≥ 0.19.2 |
 | Fabric API | 0.141.4+1.21.11 |
 | GeckoLib | 5.4.4 |
-| Advanced Wall Climber API | 1.0.2 (Fabric 1.21.11) |
 | Java | ≥ 21 |
 
 ## Reexportar modelos
@@ -167,6 +183,10 @@ PNG 16×16 en `textures/item/` para spawn eggs e ítem de huevos.
 ```
 
 JAR: `build/libs/silverfish-expansion-1.0.0.jar`
+
+## Autor y licencia
+
+Autor: **MOISES** (Suchinecoast92). Todos los derechos reservados. Ver `LICENSE`.
 
 ## Repositorio
 

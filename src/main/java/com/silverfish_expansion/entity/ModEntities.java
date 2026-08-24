@@ -2,6 +2,8 @@ package com.silverfish_expansion.entity;
 
 import com.silverfish_expansion.SilverfishExpansion;
 import com.silverfish_expansion.colony.ColonyPresence;
+import net.fabricmc.fabric.api.biome.v1.BiomeModifications;
+import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -72,56 +74,81 @@ public final class ModEntities {
 	}
 
 	public static void registerAttributes() {
-		FabricDefaultAttributeRegistry.register(ARANEO_SILVERFISH, ExpandedSilverfishEntity.createAttributes());
-		FabricDefaultAttributeRegistry.register(MANTIS_SILVERFISH, ExpandedSilverfishEntity.createAttributes());
-		FabricDefaultAttributeRegistry.register(FLY_SILVERFISH, ExpandedSilverfishEntity.createAttributes());
-		FabricDefaultAttributeRegistry.register(CRAB_SILVERFISH, ExpandedSilverfishEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ARANEO_SILVERFISH, ExpandedSilverfishEntity.createAttributes(SilverfishVariant.ARANEO));
+		FabricDefaultAttributeRegistry.register(MANTIS_SILVERFISH, ExpandedSilverfishEntity.createAttributes(SilverfishVariant.MANTIS));
+		FabricDefaultAttributeRegistry.register(FLY_SILVERFISH, ExpandedSilverfishEntity.createAttributes(SilverfishVariant.FLY));
+		FabricDefaultAttributeRegistry.register(CRAB_SILVERFISH, ExpandedSilverfishEntity.createAttributes(SilverfishVariant.CRAB));
 		FabricDefaultAttributeRegistry.register(QUEEN_SILVERFISH, SilverfishQueenEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(LARVA, SilverfishLarvaEntity.createAttributes());
 	}
 
 	/**
-	 * Chamber fauna refill only (structure spawn overrides). Initial 3–6 adults are placed
-	 * during worldgen; this gate keeps ambient refill from flooding the chamber.
+	 * Chamber refill uses structure spawn overrides. Wild biome entries are a faint
+	 * underground trail so players notice the colony before finding the nest.
 	 */
 	public static void registerSpawnPlacements() {
 		SpawnPlacements.register(
 				ARANEO_SILVERFISH,
 				SpawnPlacementTypes.ON_GROUND,
 				Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-				ModEntities::checkColonyCombatantSpawn
+				ModEntities::checkCombatantSpawn
 		);
 		SpawnPlacements.register(
 				MANTIS_SILVERFISH,
 				SpawnPlacementTypes.ON_GROUND,
 				Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-				ModEntities::checkColonyCombatantSpawn
+				ModEntities::checkCombatantSpawn
 		);
 		SpawnPlacements.register(
 				FLY_SILVERFISH,
 				SpawnPlacementTypes.ON_GROUND,
 				Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-				ModEntities::checkColonyCombatantSpawn
+				ModEntities::checkCombatantSpawn
 		);
 		SpawnPlacements.register(
 				CRAB_SILVERFISH,
 				SpawnPlacementTypes.ON_GROUND,
 				Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-				ModEntities::checkColonyCombatantSpawn
+				ModEntities::checkCombatantSpawn
 		);
 	}
 
-	private static boolean checkColonyCombatantSpawn(
+	public static void registerWildHintSpawns() {
+		var overworld = BiomeSelectors.foundInOverworld();
+		addWildHint(overworld, ARANEO_SILVERFISH, 3);
+		addWildHint(overworld, MANTIS_SILVERFISH, 2);
+		addWildHint(overworld, FLY_SILVERFISH, 2);
+		addWildHint(overworld, CRAB_SILVERFISH, 2);
+	}
+
+	private static void addWildHint(
+			java.util.function.Predicate<net.fabricmc.fabric.api.biome.v1.BiomeSelectionContext> biomes,
+			EntityType<ExpandedSilverfishEntity> type,
+			int weight
+	) {
+		BiomeModifications.addSpawn(biomes, MobCategory.MONSTER, type, weight, 1, 1);
+	}
+
+	private static boolean checkCombatantSpawn(
 			EntityType<? extends Monster> type,
 			net.minecraft.world.level.ServerLevelAccessor level,
 			net.minecraft.world.entity.EntitySpawnReason reason,
 			net.minecraft.core.BlockPos pos,
 			net.minecraft.util.RandomSource random
 	) {
+		if (reason == net.minecraft.world.entity.EntitySpawnReason.SPAWN_ITEM_USE
+				|| reason == net.minecraft.world.entity.EntitySpawnReason.COMMAND
+				|| reason == net.minecraft.world.entity.EntitySpawnReason.DISPENSER) {
+			return true;
+		}
 		if (!Monster.checkMonsterSpawnRules(type, level, reason, pos, random)) {
 			return false;
 		}
-		return ColonyPresence.canSpawnCombatant(level, pos);
+		if (reason == net.minecraft.world.entity.EntitySpawnReason.STRUCTURE
+				|| reason == net.minecraft.world.entity.EntitySpawnReason.CHUNK_GENERATION) {
+			return ColonyPresence.canSpawnCombatant(level, pos);
+		}
+		return ColonyPresence.canSpawnWildHint(level, pos);
 	}
 
 	public static EntityType<ExpandedSilverfishEntity> typeFor(SilverfishVariant variant) {

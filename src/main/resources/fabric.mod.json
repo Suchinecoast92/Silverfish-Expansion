@@ -3,7 +3,7 @@
 	"id": "silverfish-expansion",
 	"version": "${version}",
 	"name": "Silverfish Expansion",
-	"description": "Añade tres variantes animadas de silverfish: Araneo, Mantis y Fly.",
+	"description": "Expande el ciclo de vida del silverfish: huevos, larvas, adultos que trepan y una matriarca en cámaras de cría subterráneas.",
 	"authors": [
 		"MOISES"
 	],
@@ -11,7 +11,7 @@
 		"homepage": "https://github.com/Suchinecoast92/Silverfish-Expansion",
 		"sources": "https://github.com/Suchinecoast92/Silverfish-Expansion"
 	},
-	"license": "CC0-1.0",
+	"license": "All-Rights-Reserved",
 	"icon": "assets/silverfish-expansion/icon.png",
 	"environment": "*",
 	"entrypoints": {
@@ -34,7 +34,6 @@
 		"minecraft": "~1.21.11",
 		"java": ">=21",
 		"fabric-api": "*",
-		"geckolib": "*",
-		"awcapi": "*"
+		"geckolib": "*"
 	}
 }

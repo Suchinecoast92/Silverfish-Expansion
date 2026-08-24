@@ -15,21 +15,6 @@ repositories {
 			includeGroup("com.eliotlash.mclib")
 		}
 	}
-	exclusiveContent {
-		forRepository {
-			maven {
-				name = 'Modrinth'
-				url = 'https://api.modrinth.com/maven'
-				metadataSources {
-					mavenPom()
-					artifact()
-				}
-			}
-		}
-		filter {
-			includeGroup 'maven.modrinth'
-		}
-	}
 }
 
 loom {
@@ -53,8 +38,6 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 	modImplementation "software.bernie.geckolib:geckolib-fabric-${project.minecraft_version}:${project.geckolib_version}"
-	// Advanced Wall Climber API (Fabric 1.21.11, 1.0.2)
-	modImplementation "maven.modrinth:UtjdGsKV:${project.awcapi_version}"
 }
 
 processResources {
