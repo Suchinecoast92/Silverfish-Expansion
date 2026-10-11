@@ -4,21 +4,21 @@ Mod de **Fabric** para Minecraft **1.21.11** que añade variantes animadas de si
 
 Ciclo de vida:
 
-**Huevos → Larva → Piedra infestada vanilla → Silverfish → Adulto (Araneo / Mantis / Fly / Crab) → Matriarca → Nuevos huevos**
+**Huevos → Larva → Piedra infestada vanilla → Silverfish → Adulto (Araneo / Mantis / Fly / Crab)**
 
 ## Estado actual
 
 | Contenido | Estado |
 |-----------|--------|
 | Adultos Araneo / Mantis / Fly / Crab | Completo |
-| Trepar paredes (como araña vanilla) | Completo (terrestres + reina) |
+| Trepar paredes (como araña vanilla) | Completo (adultos terrestres) |
 | Deambulación errática / curiosa | Completo |
 | Huevos amontonables | Completo |
 | Eclosión natural de huevos | Completo |
 | Larvas e infestación | Completo |
 | Maduración en piedra infestada vanilla | Completo |
-| Cámara de cría (worldgen) | Completo |
-| Matriarca / Reina | Completo (puesta + alerta; decadencia sin ella) |
+| Cámara de cría (worldgen) | Completo (nido amplio, sin reina) |
+| Matriarca / Reina | Deshabilitada (código conservado; no spawnea) |
 | Iconos de creativo | Completo |
 | Spawns leves de rastro en cuevas | Completo |
 
@@ -30,7 +30,7 @@ Ciclo de vida:
 | Mantis Silverfish | `mantis_silverfish` | 7 HP, daño 3, vel. 0.30. Más daño. |
 | Fly Silverfish | `fly_silverfish` | 5 HP, daño 1.5, vel. 0.36. Frágil y rápido; persigue en el aire. |
 | Crab Silverfish | `crab_silverfish` | 14 HP, daño 2, vel. 0.22, armadura 3. Más aguante. |
-| Queen Silverfish | `queen_silverfish` | 20 HP, vel. 0.22, escala 1.5. No ataca; huye al herirla. Pone huevos. |
+| Queen Silverfish | `queen_silverfish` | **Deshabilitada.** No sale en worldgen ni en creativo. |
 
 ### Animaciones
 
@@ -42,15 +42,15 @@ Ciclo de vida:
 | `idle3` | Fly y reina | Igual que los otros idles |
 | `startFlying` → `flying` | Solo Fly | Despegue y vuelo |
 | `stopFlying` | Solo Fly | Aterrizaje sin daño por caída |
-| `putEgg` | Solo reina | Puesta de huevos (~6 s) |
+| `putEgg` | Reina (deshabilitada) | No se usa en el juego actual |
 
 ### Comportamiento
 
-- **Deambulación errática**: trayectos cortos, cambios de rumbo, pausas “curiosas” y velocidad variable (terrestres y reina; Fly solo en suelo).
+- **Deambulación errática**: trayectos cortos, cambios de rumbo, pausas “curiosas” y velocidad variable (terrestres; Fly solo en suelo).
 - **Mirada curiosa**: giros de cabeza ocasionales.
-- **Trepar**: Araneo, Mantis, Crab y la reina trepan paredes como las arañas vanilla (siguen derechas; no se pegan al techo). El Fly y la larva no trepan.
-- **Alerta de colonia**: si hieren a un adulto o a la reina, los aliados cercanos (adultos y silverfish vanilla) se vuelven contra el atacante. La reina no pelea: huye.
-- **Puesta**: la reina se clava, reproduce `putEgg` y deja un huevo detrás. Condiciones y topes más abajo.
+- **Trepar**: Araneo, Mantis y Crab trepan paredes como las arañas vanilla (siguen derechos; no se pegan al techo). El Fly y la larva no trepan.
+- **Agresión**: como el silverfish vanilla, atacan al jugador en cuanto lo ven. Si hieren a un adulto, los aliados cercanos se vuelven contra el atacante.
+- **Loot de nido**: solo los adultos **persistentes** (los de la cámara) pueden soltar restos de cueva en poca cantidad (slime, pepitas, carbón/redstone/cobre). Los salvajes y los eclosionados no, para no farmear.
 - **Fly**: vuelo local respecto al suelo/techo cercano (sin atravesar techos ni despegar en techos bajos). Si tiene objetivo, lo persigue en el aire con alcance de melee del silverfish vanilla + 10 %.
 
 ## Huevos
@@ -59,7 +59,7 @@ Ciclo de vida:
 - Sonido de colocación tipo tortuga (`metal.place`); rotura `TURTLE_EGG_BREAK`.
 - Aplastamiento solo en suelo (como huevos de tortuga).
 - ~60 % de chance de larva al romper/aplastar un huevo.
-- Larva, silverfish vanilla, adultos y reina **no aplastan** los huevos.
+- Larva, silverfish vanilla y adultos **no aplastan** los huevos.
 - Toda la colonia **atraviesa** los huevos (sin colisión ni saltos de pathfinding).
 
 ## Larvas
@@ -91,7 +91,7 @@ Estructura subterránea natural (no dungeon). Localizar con:
 ### Forma
 
 - Cavidad irregular por metaballs (varios lóbulos + salas laterales).
-- Red tipo hormiguero: nodos satélite conectados por túneles, cruces entre nodos y túneles exploratorios largos.
+- Red tipo hormiguero **más extensa**: más nodos satélite, más cruces y más pasadizos exploratorios.
 - Algunos túneles conectan con cuevas vanilla; otros se pierden en la roca.
 - Rareza aprox.: spacing 32 / separation 12; altura entre y=-44 y y=4.
 
@@ -100,37 +100,23 @@ Estructura subterránea natural (no dungeon). Localizar con:
 Piedra / deepslate dominante, con manchas raras y **bordes ruidosos** de:
 
 - grava y **grava sospechosa** (~20 % de la grava; loot vanilla `trail_ruins_archaeology_common`)
-- tierra, tierra basta, tierra enraizada (soporte de raíces)
+- manchas de **musgo pálido**, algunas con alfombra de musgo pálido
 - toba, andesita, cobble
 - vetas de carbón, hierro, cobre y algo de redstone
-- liquen brillante (única luz), raíces colgantes, musgo pálido colgante
+- liquen brillante (más denso en las salas/nodos), raíces colgantes, musgo pálido colgante
 - hongos, huevos irregulares, piedras infestadas maduras
 
-**Sin** agua (las zonas bajas son depresiones de grava/tierra), sin dripstone, sin cofres, sin spawners, sin loot artificial.
+**Sin** agua (las zonas bajas son depresiones de grava/musgo), sin dripstone, sin cofres, sin spawners, sin loot artificial.
 
 ### Fauna en la cámara
 
-Al generar la estructura aparecen **1 Matriarca** y **3–12 adultos** (no cuenta la reina), repartidos por los chunks de la cámara.
+Al generar la estructura aparecen **6–12 adultos** repartidos por las salas (nodos), no amontonados en un solo centro. Los huevos también se esparcen por esos nodos.
 
-Fuera de la cámara hay **spawns leves** de adultos en cuevas oscuras (aprox. y=-54 a y=24, máximo 3 en 40 bloques). No hay reina salvaje. Sirven de rastro: el jugador nota que “aquí hay algo más” y, explorando, llega al nido.
+Fuera de la cámara hay **spawns leves** de adultos en cuevas oscuras (aprox. y=-54 a y=24, máximo 3 en 40 bloques). Sirven de rastro: el jugador nota que “aquí hay algo más” y, explorando, llega al nido.
 
-La reina se queda cerca de su ancla y pone huevos periódicamente. Si la hieren, huye y alerta a la colonia; ella no ataca. Si muere, deja de haber puestas nuevas; los huevos ya colocados siguen eclosionando. El silverfish vanilla sigue saliendo al romper piedra infestada. Las piedras infestadas de la cámara están “maduras”: al romperlas sale un adulto.
+El silverfish vanilla sigue saliendo al romper piedra infestada. Las piedras infestadas de la cámara están “maduras”: al romperlas sale un adulto.
 
 Hay un tope blando de combatientes cerca de la colonia (~14) para que no se sature.
-
-### Puesta de la reina
-
-Cada ciclo coloca **un huevo** (cluster nuevo, o +1 si ya hay uno detrás con menos de 4). No suelta varios de un solo `putEgg`.
-
-Para empezar sola hace falta todo esto a la vez:
-
-- reina viva, no herida en ~4 s y no poniendo ya
-- cooldown a 0 (~1–2 min al aparecer; ~2–4 min tras una puesta; ~30–50 s si no halló sitio)
-- menos de **10 clusters** en 12 bloques del hogar
-- menos de **14 combatientes** (adultos + silverfish vanilla) en 48 bloques
-- tirada de ~5 % cada tick
-
-Al arrancar se queda **quieta**: misma posición y rotación durante `putEgg` (~6 s). El huevo sale **justo detrás de la cola**, en el suelo. Si la golpean a mitad, aborta y no pone nada.
 
 ### Huevos (eclosión)
 
@@ -144,7 +130,7 @@ Además de aplastar/romper: los huevos hacen **tick aleatorio**, agrietan (como 
 
 ## En el juego
 
-- Spawn eggs de adultos, reina y larva, más el ítem de huevos, en creativo.
+- Spawn eggs de adultos y larva, más el ítem de huevos, en creativo.
 - Dependencias: **Fabric API** y **GeckoLib**.
 - Idiomas: inglés (`en_us`) y español México (`es_mx`).
 

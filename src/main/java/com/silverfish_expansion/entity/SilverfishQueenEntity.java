@@ -36,6 +36,8 @@ import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.state.BlockState;
@@ -55,8 +57,8 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 import java.util.EnumSet;
 
 /**
- * Colony matriarch: stays near her chamber, lays eggs, and flees when hurt.
- * The workers fight; she does not. Without a living queen, no new eggs are laid.
+ * Disabled matriarch (kept for old worlds /summon). Not spawned by worldgen or creative.
+ * Nest fauna no longer depends on a queen.
  */
 public class SilverfishQueenEntity extends Monster implements GeoEntity {
 	private static final EntityDataAccessor<Boolean> DATA_WALKING =
@@ -228,7 +230,7 @@ public class SilverfishQueenEntity extends Monster implements GeoEntity {
 		});
 		goalSelector.addGoal(1, new PanicGoal(this, 1.45));
 		goalSelector.addGoal(2, new AvoidEntityGoal<>(this, Player.class, 12.0F, 1.15, 1.4, this::shouldAvoidAttacker));
-		goalSelector.addGoal(3, new LayEggGoal());
+		// goalSelector.addGoal(3, new LayEggGoal());
 		goalSelector.addGoal(4, new MoveTowardsRestrictionGoal(this, 1.0));
 		goalSelector.addGoal(5, new ErraticSilverfishWanderGoal(this, 0.85, () -> !isLayingEggs() && !isRecentlyHurt()));
 		goalSelector.addGoal(6, new CuriousSilverfishLookGoal(this, () -> !isLayingEggs() && !isRecentlyHurt()));
@@ -389,6 +391,34 @@ public class SilverfishQueenEntity extends Monster implements GeoEntity {
 		return hurt;
 	}
 
+	@Override
+	protected void dropCustomDeathLoot(ServerLevel level, DamageSource damageSource, boolean recentlyHit) {
+		super.dropCustomDeathLoot(level, damageSource, recentlyHit);
+		if (random.nextFloat() < 0.45F) {
+			int slime = 1 + (random.nextFloat() < 0.3F ? 1 : 0);
+			spawnAtLocation(level, new ItemStack(Items.SLIME_BALL, slime));
+		}
+		if (random.nextFloat() < 0.40F) {
+			spawnAtLocation(level, new ItemStack(Items.IRON_NUGGET, 2 + random.nextInt(4)));
+		}
+		if (random.nextFloat() < 0.22F) {
+			spawnAtLocation(level, new ItemStack(Items.GOLD_NUGGET, 1 + random.nextInt(3)));
+		}
+		if (random.nextFloat() < 0.35F) {
+			ItemStack scrap = switch (random.nextInt(3)) {
+				case 0 -> new ItemStack(Items.COAL, 1 + random.nextInt(3));
+				case 1 -> new ItemStack(Items.REDSTONE, 1 + random.nextInt(2));
+				default -> new ItemStack(Items.RAW_COPPER, 1 + random.nextInt(2));
+			};
+			spawnAtLocation(level, scrap);
+		}
+	}
+
+	@Override
+	protected int getBaseExperienceReward(ServerLevel level) {
+		return 15;
+	}
+
 	@Nullable
 	private BlockPos tryPlaceEggNearHome() {
 		Vec3 back = backwardAlongSurface();
@@ -477,6 +507,7 @@ public class SilverfishQueenEntity extends Monster implements GeoEntity {
 		snapshotLayPose();
 		setLayingEggs(true);
 		layTicks = LAY_ANIM_TICKS;
+		playLayStartSound();
 		applyLayPose();
 	}
 
@@ -538,6 +569,19 @@ public class SilverfishQueenEntity extends Monster implements GeoEntity {
 		if (!placed) {
 			layCooldown = Math.min(layCooldown, 600 + random.nextInt(400));
 		}
+	}
+
+	private void playLayStartSound() {
+		level().playSound(
+				null,
+				getX(),
+				getY(),
+				getZ(),
+				SoundEvents.TURTLE_LAY_EGG,
+				SoundSource.NEUTRAL,
+				0.9F,
+				0.8F + random.nextFloat() * 0.25F
+		);
 	}
 
 	private void playEggPlaceSound(BlockPos pos) {

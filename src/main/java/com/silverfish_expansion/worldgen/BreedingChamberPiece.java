@@ -5,7 +5,6 @@ import com.silverfish_expansion.block.SilverfishEggsBlock;
 import com.silverfish_expansion.colony.ColonyInfestationData;
 import com.silverfish_expansion.entity.ExpandedSilverfishEntity;
 import com.silverfish_expansion.entity.ModEntities;
-import com.silverfish_expansion.entity.SilverfishQueenEntity;
 import com.silverfish_expansion.entity.SilverfishVariant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -97,7 +96,10 @@ public class BreedingChamberPiece extends StructurePiece {
 	private static final int SALT_FLOOR_TUFF = 30;
 	private static final int SALT_FLOOR_DITHER = 31;
 	private static final int SALT_WALL_DITHER = 32;
+	private static final int SALT_MOSS_CARPET = 33;
 	private static final float SUSPICIOUS_GRAVEL_CHANCE = 0.20F;
+	private static final float MOSS_CARPET_CHANCE = 0.32F;
+	private static final double NEST_LICHEN_RADIUS = 8.0;
 
 	private static final Direction[] EGG_FACES = {
 			Direction.DOWN, Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST, Direction.UP
@@ -133,42 +135,31 @@ public class BreedingChamberPiece extends StructurePiece {
 		tag.putInt("CZ", this.center.getZ());
 	}
 
-	/** Widest part of the chamber; one matriarch is placed here during worldgen. */
-	public BlockPos getMatriarchAnchor() {
+	/** Main chamber floor; used as a fallback focus, not a queen seat. */
+	public BlockPos getNestAnchor() {
 		return new BlockPos(Mth.floor(this.layout.anchorX()), this.layout.baseFloorY() + 1, Mth.floor(this.layout.anchorZ()));
 	}
 
-	private static final int COLONY_ADULT_MIN = 3;
+	private static final int COLONY_ADULT_MIN = 6;
 	private static final int COLONY_ADULT_MAX = 12;
 
 	/**
-	 * Places the queen and 3–12 adults. Each structure chunk runs the same seeded
+	 * Spreads adults through colony nodes. Each structure chunk runs the same seeded
 	 * sequence and only inserts entities whose stand is inside the chunk being
 	 * decorated — never touching neighbour chunks (that deadlocks WorldGenRegion).
 	 */
 	private void trySpawnColonyFauna(WorldGenLevel level, BoundingBox chunkBox) {
 		RandomSource fauna = RandomSource.create(this.seed ^ 0x51F15EEDL);
-		BlockPos anchor = getMatriarchAnchor();
-
-		BlockPos queenPos = findSpawnStandInChunk(level, chunkBox, anchor, 4);
-		if (queenPos != null) {
-			spawnMatriarch(level, queenPos, anchor, fauna);
-		} else {
-			fauna.nextFloat(); // keep adult sequence aligned when this chunk has no queen
-		}
-
+		List<ColonyNode> nodes = this.layout.nodes();
 		int adults = COLONY_ADULT_MIN + fauna.nextInt(COLONY_ADULT_MAX - COLONY_ADULT_MIN + 1);
 		for (int i = 0; i < adults; i++) {
-			int dx;
-			int dz;
-			do {
-				dx = fauna.nextInt(29) - 14;
-				dz = fauna.nextInt(29) - 14;
-			} while (dx * dx + dz * dz < 9);
+			ColonyNode node = nodes.get(fauna.nextInt(nodes.size()));
+			int dx = fauna.nextInt(7) - 3;
+			int dz = fauna.nextInt(7) - 3;
 			int variantPick = fauna.nextInt(SilverfishVariant.values().length);
 			float yaw = fauna.nextFloat() * 360.0F;
-			BlockPos probe = anchor.offset(dx, 0, dz);
-			BlockPos stand = findSpawnStandInChunk(level, chunkBox, probe, 3);
+			BlockPos probe = BlockPos.containing(node.x() + dx, node.y(), node.z() + dz);
+			BlockPos stand = findSpawnStandInChunk(level, chunkBox, probe, 4);
 			if (stand != null) {
 				spawnColonyAdult(level, stand, SilverfishVariant.values()[variantPick], yaw);
 			}
@@ -226,16 +217,8 @@ public class BreedingChamberPiece extends StructurePiece {
 		return level.hasChunk(SectionPos.blockToSectionCoord(x), SectionPos.blockToSectionCoord(z));
 	}
 
-	private void spawnMatriarch(WorldGenLevel level, BlockPos stand, BlockPos home, RandomSource random) {
-		SilverfishQueenEntity queen = ModEntities.QUEEN_SILVERFISH.create(level.getLevel(), EntitySpawnReason.STRUCTURE);
-		if (queen == null) {
-			return;
-		}
-		queen.snapTo(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5, random.nextFloat() * 360.0F, 0.0F);
-		queen.setPersistenceRequired();
-		queen.setColonyHome(home);
-		level.addFreshEntity(queen);
-	}
+	// Queen spawn disabled: the nest is the colony, not a matriarch mob.
+	// private void spawnMatriarch(...) { ... }
 
 	private void spawnColonyAdult(WorldGenLevel level, BlockPos stand, SilverfishVariant variant, float yaw) {
 		ExpandedSilverfishEntity adult = ModEntities.typeFor(variant).create(level.getLevel(), EntitySpawnReason.STRUCTURE);
@@ -264,6 +247,7 @@ public class BreedingChamberPiece extends StructurePiece {
 			List<Blob> lobes,
 			List<Blob> tunnels,
 			List<TunnelTip> tips,
+			List<ColonyNode> nodes,
 			double anchorX,
 			double anchorZ,
 			int baseFloorY,
@@ -284,7 +268,7 @@ public class BreedingChamberPiece extends StructurePiece {
 		lobes.add(new Blob(mainX, cy, mainZ, mainRadius));
 
 		// Nearby lobes thicken the main chamber; farther ones become side rooms.
-		int lobeCount = 7 + random.nextInt(4);
+		int lobeCount = 9 + random.nextInt(4);
 		double angle = random.nextDouble() * Math.PI * 2.0;
 		for (int i = 0; i < lobeCount; i++) {
 			angle += Math.PI * 2.0 / lobeCount * (0.55 + random.nextDouble() * 0.9);
@@ -301,13 +285,13 @@ public class BreedingChamberPiece extends StructurePiece {
 		List<ColonyNode> nodes = new ArrayList<>();
 		nodes.add(new ColonyNode(mainX, baseFloorY + 3.0, mainZ, mainRadius * 0.35));
 
-		int satelliteCount = 4 + random.nextInt(3);
+		int satelliteCount = 7 + random.nextInt(4);
 		angle = random.nextDouble() * Math.PI * 2.0;
 		for (int i = 0; i < satelliteCount; i++) {
-			angle += Math.PI * 2.0 / satelliteCount * (0.7 + random.nextDouble() * 0.6);
-			double distance = 20.0 + random.nextDouble() * 14.0;
-			double radius = 3.8 + random.nextDouble() * 2.2;
-			double y = baseFloorY + 2.0 + random.nextDouble() * 4.0;
+			angle += Math.PI * 2.0 / satelliteCount * (0.65 + random.nextDouble() * 0.7);
+			double distance = 22.0 + random.nextDouble() * 20.0;
+			double radius = 3.6 + random.nextDouble() * 2.6;
+			double y = baseFloorY + 1.5 + random.nextDouble() * 5.0;
 			double nx = mainX + Math.cos(angle) * distance;
 			double nz = mainZ + Math.sin(angle) * distance;
 			nodes.add(new ColonyNode(nx, y, nz, radius));
@@ -324,8 +308,8 @@ public class BreedingChamberPiece extends StructurePiece {
 			carveTunnel(tunnels, tips, random, from.x(), from.y(), from.z(), to.x(), to.y(), to.z(), 1.9, 1.35, false);
 		}
 
-		// A few cross-links between satellites so paths loop like a nest.
-		int crossLinks = 1 + random.nextInt(3);
+		// Cross-links between satellites so paths loop like a nest.
+		int crossLinks = 4 + random.nextInt(4);
 		for (int i = 0; i < crossLinks; i++) {
 			int a = 1 + random.nextInt(nodes.size() - 1);
 			int b = 1 + random.nextInt(nodes.size() - 1);
@@ -337,15 +321,26 @@ public class BreedingChamberPiece extends StructurePiece {
 			carveTunnel(tunnels, tips, random, from.x(), from.y(), from.z(), to.x(), to.y(), to.z(), 1.55, 1.2, false);
 		}
 
+		// Extra short passages so rooms have more than one way in.
+		int extraPassages = 3 + random.nextInt(3);
+		for (int i = 0; i < extraPassages; i++) {
+			ColonyNode from = nodes.get(random.nextInt(nodes.size()));
+			ColonyNode to = nodes.get(random.nextInt(nodes.size()));
+			if (from == to) {
+				continue;
+			}
+			carveTunnel(tunnels, tips, random, from.x(), from.y(), from.z(), to.x(), to.y(), to.z(), 1.4, 1.15, false);
+		}
+
 		// Dead-end / exploratory tunnels that may later punch into vanilla caves.
-		int explorers = 3 + random.nextInt(3);
+		int explorers = 6 + random.nextInt(4);
 		for (int i = 0; i < explorers; i++) {
 			ColonyNode from = nodes.get(random.nextInt(nodes.size()));
 			double heading = random.nextDouble() * Math.PI * 2.0;
 			double x = from.x();
 			double y = from.y();
 			double z = from.z();
-			int length = 22 + random.nextInt(20);
+			int length = 30 + random.nextInt(26);
 			for (int step = 0; step < length; step++) {
 				heading += (random.nextDouble() - 0.5) * 0.5;
 				x += Math.cos(heading) * 1.35;
@@ -395,7 +390,7 @@ public class BreedingChamberPiece extends StructurePiece {
 				Mth.floor(minX), Mth.floor(minY), Mth.floor(minZ),
 				Mth.ceil(maxX), Mth.ceil(maxY), Mth.ceil(maxZ)
 		);
-		return new Layout(lobes, tunnels, tips, mainX, mainZ, baseFloorY, box);
+		return new Layout(lobes, tunnels, tips, List.copyOf(nodes), mainX, mainZ, baseFloorY, box);
 	}
 
 	/** Winding passage between two colony nodes; optional tip at the end for cave seeking. */
@@ -820,14 +815,14 @@ public class BreedingChamberPiece extends StructurePiece {
 	}
 
 	/**
-	 * Stone-first floor with sparse dirt/gravel/tuff patches. Patch edges are dithered
+	 * Stone-first floor with sparse pale-moss/gravel/tuff patches. Patch edges are dithered
 	 * (soft threshold + fine noise) so materials bleed into each other instead of
 	 * forming hard blobs like a painted biome border.
 	 */
 	private BlockState floorSurface(int x, int y, int z, boolean supported) {
 		boolean deep = isDeepslate(x, y, z);
 		float damp = valueNoise2D(x, z, SALT_PUDDLE, PUDDLE_CELL);
-		// Former "puddle" dips: gravel / coarse dirt hollows instead of water.
+		// Former "puddle" dips: gravel / pale moss hollows instead of water.
 		float gravelBias = damp > 0.70F ? 0.06F : 0.0F;
 
 		float gravelField = valueNoise2D(x, z, SALT_FLOOR_PATCH, 14) + gravelBias;
@@ -837,27 +832,19 @@ public class BreedingChamberPiece extends StructurePiece {
 		// Hollow floors are almost always loose sediment — looks damp without fluids.
 		if (isHollow(x, z) && supported) {
 			if (posRand(x, y, z, SALT_FLOOR_MATERIAL) < 0.28F) {
-				return Blocks.COARSE_DIRT.defaultBlockState();
+				return Blocks.PALE_MOSS_BLOCK.defaultBlockState();
 			}
 			return gravel(x, y, z);
 		}
 
 		if (supported && softPatch2D(gravelField, 0.855F, 0.09F, x, z, SALT_FLOOR_DITHER)) {
-			// Speckle a little coarse dirt into gravel beds so the patch itself isn't flat.
 			if (posRand(x, y, z, SALT_FLOOR_MATERIAL) < 0.14F) {
-				return Blocks.COARSE_DIRT.defaultBlockState();
+				return Blocks.PALE_MOSS_BLOCK.defaultBlockState();
 			}
 			return gravel(x, y, z);
 		}
 		if (softPatch2D(dirtField, 0.875F, 0.08F, x, z, SALT_FLOOR_DITHER + 3)) {
-			float roll = posRand(x, y, z, SALT_FLOOR_MATERIAL + 40);
-			if (roll < 0.18F) {
-				return Blocks.DIRT.defaultBlockState();
-			}
-			if (roll < 0.26F) {
-				return Blocks.ROOTED_DIRT.defaultBlockState();
-			}
-			return Blocks.COARSE_DIRT.defaultBlockState();
+			return Blocks.PALE_MOSS_BLOCK.defaultBlockState();
 		}
 		if (softPatch2D(tuffField, 0.83F, 0.10F, x, z, SALT_FLOOR_DITHER + 7)) {
 			return Blocks.TUFF.defaultBlockState();
@@ -989,6 +976,9 @@ public class BreedingChamberPiece extends StructurePiece {
 					if (tryPlaceHangingMoss(level, grid, probe, x, y, z, minX, minY, minZ, maxX, maxY, maxZ)) {
 						continue;
 					}
+					if (tryPlacePaleMossCarpet(level, grid, cursor, probe, x, y, z)) {
+						continue;
+					}
 					if (tryPlaceGlowLichen(level, grid, cursor, probe, x, y, z)) {
 						continue;
 					}
@@ -998,6 +988,16 @@ public class BreedingChamberPiece extends StructurePiece {
 		}
 	}
 
+	private double nearestNodeDistance(int x, int z) {
+		double best = Double.MAX_VALUE;
+		for (ColonyNode node : this.layout.nodes()) {
+			double dx = x - node.x();
+			double dz = z - node.z();
+			best = Math.min(best, dx * dx + dz * dz);
+		}
+		return Math.sqrt(best);
+	}
+
 	private boolean tryPlaceEggs(
 			WorldGenLevel level,
 			Grid grid,
@@ -1005,18 +1005,11 @@ public class BreedingChamberPiece extends StructurePiece {
 			BlockPos.MutableBlockPos probe,
 			int x, int y, int z
 	) {
-		double dx = x - this.layout.anchorX();
-		double dz = z - this.layout.anchorZ();
-		double distance = Math.sqrt(dx * dx + dz * dz);
-		if (distance < 2.0) {
-			return false;
-		}
-
-		// Clusters thin out as they get further from the matriarch's ground.
-		// Pick rate ~0.079 ≈ +15% vs previous 0.069.
-		double closeness = Mth.clamp(1.0 - (distance - 4.0) / 18.0, 0.0, 1.0);
-		float threshold = 0.72F - (float) (closeness * 0.22);
-		if (valueNoise3D(x, y, z, SALT_EGG_MASK, 7) <= threshold || posRand(x, y, z, SALT_EGG_PICK) >= 0.079F) {
+		double distance = nearestNodeDistance(x, z);
+		double closeness = Mth.clamp(1.0 - distance / 10.0, 0.0, 1.0);
+		float pick = closeness > 0.0 ? 0.055F : 0.018F;
+		float threshold = 0.74F - (float) (closeness * 0.20);
+		if (valueNoise3D(x, y, z, SALT_EGG_MASK, 7) <= threshold || posRand(x, y, z, SALT_EGG_PICK) >= pick) {
 			return false;
 		}
 
@@ -1061,7 +1054,7 @@ public class BreedingChamberPiece extends StructurePiece {
 			return false;
 		}
 
-		level.setBlock(probe, Blocks.ROOTED_DIRT.defaultBlockState(), FLAGS);
+		level.setBlock(probe, Blocks.PALE_MOSS_BLOCK.defaultBlockState(), FLAGS);
 		level.setBlock(cursor, Blocks.HANGING_ROOTS.defaultBlockState(), FLAGS);
 		return true;
 	}
@@ -1116,6 +1109,31 @@ public class BreedingChamberPiece extends StructurePiece {
 		return placed;
 	}
 
+	private boolean tryPlacePaleMossCarpet(
+			WorldGenLevel level,
+			Grid grid,
+			BlockPos.MutableBlockPos cursor,
+			BlockPos.MutableBlockPos probe,
+			int x, int y, int z
+	) {
+		if (!isSolid(grid.get(x, y - 1, z))) {
+			return false;
+		}
+		if (posRand(x, y, z, SALT_MOSS_CARPET) >= MOSS_CARPET_CHANCE) {
+			return false;
+		}
+		probe.set(x, y - 1, z);
+		if (!level.getBlockState(probe).is(Blocks.PALE_MOSS_BLOCK)) {
+			return false;
+		}
+		BlockState carpet = Blocks.PALE_MOSS_CARPET.defaultBlockState();
+		if (!carpet.canSurvive(level, cursor)) {
+			return false;
+		}
+		level.setBlock(cursor, carpet, FLAGS);
+		return true;
+	}
+
 	private boolean tryPlaceGlowLichen(
 			WorldGenLevel level,
 			Grid grid,
@@ -1123,14 +1141,18 @@ public class BreedingChamberPiece extends StructurePiece {
 			BlockPos.MutableBlockPos probe,
 			int x, int y, int z
 	) {
-		if (valueNoise3D(x, y, z, SALT_LICHEN_MASK, 5) <= 0.76F || posRand(x, y, z, SALT_LICHEN_PICK) >= 0.12F) {
+		boolean nestCenter = nearestNodeDistance(x, z) < NEST_LICHEN_RADIUS;
+		float maskLimit = nestCenter ? 0.62F : 0.76F;
+		float pickLimit = nestCenter ? 0.22F : 0.12F;
+		if (valueNoise3D(x, y, z, SALT_LICHEN_MASK, 5) <= maskLimit || posRand(x, y, z, SALT_LICHEN_PICK) >= pickLimit) {
 			return false;
 		}
 
 		BlockState lichen = Blocks.GLOW_LICHEN.defaultBlockState();
 		int start = (int) (posRand(x, y, z, SALT_LICHEN_FACE) * 6.0F);
+		int maxFaces = nestCenter ? 3 : 2;
 		int faces = 0;
-		for (int i = 0; i < 6 && faces < 2; i++) {
+		for (int i = 0; i < 6 && faces < maxFaces; i++) {
 			Direction direction = Direction.values()[(start + i) % 6];
 			if (isSupported(level, grid, probe, x, y, z, direction)) {
 				lichen = lichen.setValue(MultifaceBlock.getFaceProperty(direction), true);
@@ -1157,9 +1179,7 @@ public class BreedingChamberPiece extends StructurePiece {
 		}
 		probe.set(x, y - 1, z);
 		BlockState below = level.getBlockState(probe);
-		boolean softFloor = below.is(Blocks.COARSE_DIRT)
-				|| below.is(Blocks.DIRT)
-				|| below.is(Blocks.ROOTED_DIRT)
+		boolean softFloor = below.is(Blocks.PALE_MOSS_BLOCK)
 				|| below.is(Blocks.GRAVEL);
 		boolean stoneFloor = below.is(Blocks.STONE)
 				|| below.is(Blocks.DEEPSLATE)

@@ -6,7 +6,7 @@ import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
 import net.minecraft.world.level.Level;
 
 /**
- * Vanilla spider-style wall climbing for terrestrial adults and the queen.
+ * Vanilla spider-style wall climbing for terrestrial adults.
  * Fly and larva do not climb.
  */
 public final class SilverfishClimber {

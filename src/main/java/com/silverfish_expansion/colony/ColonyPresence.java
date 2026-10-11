@@ -26,7 +26,7 @@ public final class ColonyPresence {
 	public static final double WILD_HINT_RADIUS = 40.0;
 	public static final int WILD_HINT_MIN_Y = -54;
 	public static final int WILD_HINT_MAX_Y = 24;
-	/** Max egg clusters near the queen before she stops laying. */
+	/** Max egg clusters near a nest focus before hatch/lay pressure stops. */
 	public static final int EGG_CLUSTER_CAP = 10;
 	public static final double EGG_SCAN_RADIUS = 12.0;
 	public static final double ALERT_RANGE = 20.0;

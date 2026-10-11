@@ -3,7 +3,7 @@
 	"id": "silverfish-expansion",
 	"version": "${version}",
 	"name": "Silverfish Expansion",
-	"description": "Expande el ciclo de vida del silverfish: huevos, larvas, adultos que trepan y una matriarca en cámaras de cría subterráneas.",
+	"description": "Expande el ciclo de vida del silverfish: huevos, larvas y adultos que trepan en nidos subterráneos.",
 	"authors": [
 		"MOISES"
 	],
