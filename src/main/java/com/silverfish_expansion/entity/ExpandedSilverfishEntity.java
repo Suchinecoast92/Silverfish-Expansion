@@ -27,8 +27,6 @@ import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import software.bernie.geckolib.animatable.GeoEntity;
@@ -342,31 +340,6 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 			}
 		}
 		return hurt;
-	}
-
-	@Override
-	protected void dropCustomDeathLoot(ServerLevel level, DamageSource damageSource, boolean recentlyHit) {
-		super.dropCustomDeathLoot(level, damageSource, recentlyHit);
-		if (!isPersistenceRequired()) {
-			return;
-		}
-		if (random.nextFloat() < 0.12F) {
-			spawnAtLocation(level, new ItemStack(Items.SLIME_BALL));
-		}
-		if (random.nextFloat() < 0.10F) {
-			spawnAtLocation(level, new ItemStack(Items.IRON_NUGGET, 1 + random.nextInt(2)));
-		}
-		if (random.nextFloat() < 0.05F) {
-			spawnAtLocation(level, new ItemStack(Items.GOLD_NUGGET));
-		}
-		if (random.nextFloat() < 0.08F) {
-			ItemStack scrap = switch (random.nextInt(3)) {
-				case 0 -> new ItemStack(Items.COAL);
-				case 1 -> new ItemStack(Items.REDSTONE);
-				default -> new ItemStack(Items.RAW_COPPER);
-			};
-			spawnAtLocation(level, scrap);
-		}
 	}
 
 	/** Fly variant should stay airborne while it has a living target. */
@@ -752,6 +725,13 @@ public class ExpandedSilverfishEntity extends Monster implements GeoEntity {
 	@Override
 	public boolean onClimbable() {
 		return usesWallClimbing() ? isClimbing() : super.onClimbable();
+	}
+
+	@Override
+	public void makeStuckInBlock(net.minecraft.world.level.block.state.BlockState state, Vec3 motionMultiplier) {
+		if (!state.is(net.minecraft.world.level.block.Blocks.COBWEB)) {
+			super.makeStuckInBlock(state, motionMultiplier);
+		}
 	}
 
 	@Override

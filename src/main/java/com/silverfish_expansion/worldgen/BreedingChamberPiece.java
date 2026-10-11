@@ -1,5 +1,6 @@
 package com.silverfish_expansion.worldgen;
 
+import com.silverfish_expansion.SilverfishExpansion;
 import com.silverfish_expansion.block.ModBlocks;
 import com.silverfish_expansion.block.SilverfishEggsBlock;
 import com.silverfish_expansion.colony.ColonyInfestationData;
@@ -9,11 +10,15 @@ import com.silverfish_expansion.entity.SilverfishVariant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.RandomizableContainer;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.StructureManager;
@@ -25,11 +30,13 @@ import net.minecraft.world.level.block.MultifaceBlock;
 import net.minecraft.world.level.block.entity.BrushableBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.RailShape;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
+import net.minecraft.world.level.storage.loot.LootTable;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -100,6 +107,26 @@ public class BreedingChamberPiece extends StructurePiece {
 	private static final float SUSPICIOUS_GRAVEL_CHANCE = 0.20F;
 	private static final float MOSS_CARPET_CHANCE = 0.32F;
 	private static final double NEST_LICHEN_RADIUS = 8.0;
+
+	private static final int SALT_REMAINS_FLOOR = 34;
+	private static final int SALT_REMAINS_RAIL = 35;
+	private static final int SALT_REMAINS_POST = 36;
+	private static final int SALT_REMAINS_SLAB = 37;
+	private static final int SALT_REMAINS_COBWEB = 38;
+	private static final int SALT_REMAINS_FRAME = 39;
+	private static final int TRAIL_SKIP = 6;
+	/** Tunnel blobs are ~1.35 blocks apart, so this puts a mine frame roughly every 7 blocks. */
+	private static final int TRAIL_SUPPORT_SPACING = 5;
+	private static final float REMAINS_BARREL_CHANCE = 0.40F;
+
+	private static final ResourceKey<LootTable> REMAINS_POT_LOOT = ResourceKey.create(
+			Registries.LOOT_TABLE,
+			Identifier.fromNamespaceAndPath(SilverfishExpansion.MOD_ID, "chests/nest_remains_pot")
+	);
+	private static final ResourceKey<LootTable> LOST_MINER_BARREL_LOOT = ResourceKey.create(
+			Registries.LOOT_TABLE,
+			Identifier.fromNamespaceAndPath(SilverfishExpansion.MOD_ID, "chests/lost_miner_barrel")
+	);
 
 	private static final Direction[] EGG_FACES = {
 			Direction.DOWN, Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST, Direction.UP
@@ -243,11 +270,20 @@ public class BreedingChamberPiece extends StructurePiece {
 	private record ColonyNode(double x, double y, double z, double radius) {
 	}
 
+	/** Abandoned miner's camp: the satellite room plus the tunnel the miner came in through. */
+	private record RemainsSite(double x, double y, double z, double radius, List<Blob> trail) {
+		boolean isSupport(int index) {
+			return index % TRAIL_SUPPORT_SPACING == TRAIL_SUPPORT_SPACING / 2 && index + 1 < this.trail.size();
+		}
+	}
+
 	private record Layout(
 			List<Blob> lobes,
 			List<Blob> tunnels,
 			List<TunnelTip> tips,
 			List<ColonyNode> nodes,
+			List<RemainsSite> remains,
+			int barrelTip,
 			double anchorX,
 			double anchorZ,
 			int baseFloorY,
@@ -302,10 +338,14 @@ public class BreedingChamberPiece extends StructurePiece {
 		List<TunnelTip> tips = new ArrayList<>();
 
 		// Main → each satellite.
+		List<List<Blob>> approaches = new ArrayList<>();
+		approaches.add(List.of());
 		for (int i = 1; i < nodes.size(); i++) {
 			ColonyNode from = nodes.get(0);
 			ColonyNode to = nodes.get(i);
+			int start = tunnels.size();
 			carveTunnel(tunnels, tips, random, from.x(), from.y(), from.z(), to.x(), to.y(), to.z(), 1.9, 1.35, false);
+			approaches.add(List.copyOf(tunnels.subList(start, tunnels.size())));
 		}
 
 		// Cross-links between satellites so paths loop like a nest.
@@ -352,6 +392,21 @@ public class BreedingChamberPiece extends StructurePiece {
 			tips.add(new TunnelTip(x, y, z, heading));
 		}
 
+		// Drawn after the geometry so existing nests keep their exact shape.
+		List<RemainsSite> remains = new ArrayList<>();
+		if (nodes.size() > 1) {
+			int firstNode = 1 + random.nextInt(nodes.size() - 1);
+			int secondNode = random.nextFloat() < 0.5F ? 1 + random.nextInt(nodes.size() - 1) : firstNode;
+			for (int nodeIndex : secondNode == firstNode ? new int[]{firstNode} : new int[]{firstNode, secondNode}) {
+				ColonyNode node = nodes.get(nodeIndex);
+				List<Blob> approach = approaches.get(nodeIndex);
+				// The first blobs still sit inside the main chamber; the miner's trail starts past them.
+				List<Blob> trail = approach.size() > TRAIL_SKIP ? approach.subList(TRAIL_SKIP, approach.size()) : List.of();
+				remains.add(new RemainsSite(node.x(), node.y(), node.z(), node.radius(), List.copyOf(trail)));
+			}
+		}
+		int barrelTip = !tips.isEmpty() && random.nextFloat() < REMAINS_BARREL_CHANCE ? random.nextInt(tips.size()) : -1;
+
 		double minX = Double.MAX_VALUE;
 		double minY = Double.MAX_VALUE;
 		double minZ = Double.MAX_VALUE;
@@ -390,7 +445,7 @@ public class BreedingChamberPiece extends StructurePiece {
 				Mth.floor(minX), Mth.floor(minY), Mth.floor(minZ),
 				Mth.ceil(maxX), Mth.ceil(maxY), Mth.ceil(maxZ)
 		);
-		return new Layout(lobes, tunnels, tips, List.copyOf(nodes), mainX, mainZ, baseFloorY, box);
+		return new Layout(lobes, tunnels, tips, List.copyOf(nodes), List.copyOf(remains), barrelTip, mainX, mainZ, baseFloorY, box);
 	}
 
 	/** Winding passage between two colony nodes; optional tip at the end for cave seeking. */
@@ -471,6 +526,7 @@ public class BreedingChamberPiece extends StructurePiece {
 		placeTerrain(level, grid, cursor, minX, minY, minZ, maxX, maxY, maxZ);
 		connectTunnelsToCaves(level, chunkBox, cursor);
 		placeDecoration(level, grid, cursor, probe, minX, minY, minZ, maxX, maxY, maxZ);
+		placeRemainsFeatures(level, chunkBox);
 		trySpawnColonyFauna(level, chunkBox);
 	}
 
@@ -829,6 +885,20 @@ public class BreedingChamberPiece extends StructurePiece {
 		float dirtField = valueNoise2D(x, z, SALT_FLOOR_MATERIAL, 12);
 		float tuffField = valueNoise2D(x, z, SALT_FLOOR_TUFF, 10);
 
+		// Along the miner's trail and camp: dug-up gravel and loose cobble.
+		if (supported && inRemainsArea(x, y + 1, z)) {
+			float roll = posRand(x, y, z, SALT_REMAINS_FLOOR);
+			if (roll < 0.07F) {
+				return Blocks.SUSPICIOUS_GRAVEL.defaultBlockState();
+			}
+			if (roll < 0.17F) {
+				return deep ? Blocks.COBBLED_DEEPSLATE.defaultBlockState() : Blocks.COBBLESTONE.defaultBlockState();
+			}
+			if (roll < 0.25F) {
+				return Blocks.GRAVEL.defaultBlockState();
+			}
+		}
+
 		// Hollow floors are almost always loose sediment — looks damp without fluids.
 		if (isHollow(x, z) && supported) {
 			if (posRand(x, y, z, SALT_FLOOR_MATERIAL) < 0.28F) {
@@ -967,6 +1037,9 @@ public class BreedingChamberPiece extends StructurePiece {
 						continue;
 					}
 
+					if (tryPlaceRemains(level, grid, cursor, probe, x, y, z, maxY)) {
+						continue;
+					}
 					if (tryPlaceEggs(level, grid, cursor, probe, x, y, z)) {
 						continue;
 					}
@@ -985,6 +1058,340 @@ public class BreedingChamberPiece extends StructurePiece {
 					tryPlaceMushroom(level, grid, cursor, probe, x, y, z);
 				}
 			}
+		}
+	}
+
+	// ------------------------------------------------------------------
+	// Miner's remains
+	// ------------------------------------------------------------------
+
+	private boolean inRemainsArea(int x, int y, int z) {
+		for (RemainsSite site : this.layout.remains()) {
+			if (inRemainsRoom(site, x, y, z) || nearestTrailIndex(site, x, y, z) >= 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static boolean inRemainsRoom(RemainsSite site, int x, int y, int z) {
+		double dx = x + 0.5 - site.x();
+		double dz = z + 0.5 - site.z();
+		double reach = site.radius() + 3.0;
+		return dx * dx + dz * dz < reach * reach && Math.abs(y + 0.5 - site.y()) < 7.0;
+	}
+
+	/** Index of the closest trail blob whose tunnel contains this cell, or -1. */
+	private static int nearestTrailIndex(RemainsSite site, int x, int y, int z) {
+		int best = -1;
+		double bestDist = Double.MAX_VALUE;
+		List<Blob> trail = site.trail();
+		for (int i = 0; i < trail.size(); i++) {
+			Blob blob = trail.get(i);
+			if (Math.abs(y + 0.5 - blob.y()) > 3.5) {
+				continue;
+			}
+			double dx = x + 0.5 - blob.x();
+			double dz = z + 0.5 - blob.z();
+			double dist = dx * dx + dz * dz;
+			double reach = blob.radius() + 1.0;
+			if (dist < reach * reach && dist < bestDist) {
+				best = i;
+				bestDist = dist;
+			}
+		}
+		return best;
+	}
+
+	/**
+	 * The miner's trail runs down the tunnel into the room: mine frames at intervals, a rail line
+	 * with broken runs, fallen planks and cobwebs spread over the whole way, not one corner.
+	 */
+	private boolean tryPlaceRemains(
+			WorldGenLevel level,
+			Grid grid,
+			BlockPos.MutableBlockPos cursor,
+			BlockPos.MutableBlockPos probe,
+			int x, int y, int z,
+			int maxY
+	) {
+		List<RemainsSite> sites = this.layout.remains();
+		for (int siteIndex = 0; siteIndex < sites.size(); siteIndex++) {
+			RemainsSite site = sites.get(siteIndex);
+			int trailIndex = nearestTrailIndex(site, x, y, z);
+			if (trailIndex < 0 && !inRemainsRoom(site, x, y, z)) {
+				continue;
+			}
+
+			if (trailIndex >= 0 && tryPlaceMineFrame(level, grid, cursor, probe, site, siteIndex, x, y, z, maxY)) {
+				return true;
+			}
+			boolean onFloor = isSupported(level, grid, probe, x, y, z, Direction.DOWN);
+			if (onFloor && trailIndex >= 0) {
+				RailShape rail = railAt(site, siteIndex, trailIndex, x, y, z);
+				if (rail != null) {
+					level.setBlock(cursor, Blocks.RAIL.defaultBlockState().setValue(BlockStateProperties.RAIL_SHAPE, rail), FLAGS);
+					return true;
+				}
+			}
+			if (onFloor && posRand(x, y, z, SALT_REMAINS_SLAB) < 0.025F) {
+				level.setBlock(cursor, Blocks.DARK_OAK_SLAB.defaultBlockState(), FLAGS);
+				return true;
+			}
+			if (posRand(x, y, z, SALT_REMAINS_COBWEB) < 0.07F && touchesWallOrCeiling(level, grid, probe, x, y, z)) {
+				level.setBlock(cursor, Blocks.COBWEB.defaultBlockState(), FLAGS);
+				return true;
+			}
+			return false;
+		}
+		return false;
+	}
+
+	/**
+	 * Mine frame across the tunnel: a post against each wall and a plank lintel along the ceiling.
+	 * Some frames are snapped (short posts, no lintel) and some collapsed into loose slabs.
+	 */
+	private boolean tryPlaceMineFrame(
+			WorldGenLevel level,
+			Grid grid,
+			BlockPos.MutableBlockPos cursor,
+			BlockPos.MutableBlockPos probe,
+			RemainsSite site,
+			int siteIndex,
+			int x, int y, int z,
+			int maxY
+	) {
+		List<Blob> trail = site.trail();
+		for (int k = 0; k < trail.size(); k++) {
+			if (!site.isSupport(k)) {
+				continue;
+			}
+			Blob blob = trail.get(k);
+			Blob next = trail.get(k + 1);
+			boolean alongX = Math.abs(next.x() - blob.x()) >= Math.abs(next.z() - blob.z());
+			int planeX = Mth.floor(blob.x());
+			int planeZ = Mth.floor(blob.z());
+			if (alongX ? x != planeX : z != planeZ) {
+				continue;
+			}
+			int across = alongX ? z - planeZ : x - planeX;
+			if (Math.abs(across) > 3 || Math.abs(y + 0.5 - blob.y()) > 4.0) {
+				continue;
+			}
+
+			boolean onFloor = isSupported(level, grid, probe, x, y, z, Direction.DOWN);
+			float condition = posRand(k, siteIndex, 0, SALT_REMAINS_FRAME);
+			if (condition < 0.18F) {
+				if (onFloor && posRand(x, y, z, SALT_REMAINS_FRAME) < 0.5F) {
+					level.setBlock(cursor, Blocks.DARK_OAK_SLAB.defaultBlockState(), FLAGS);
+					return true;
+				}
+				return false;
+			}
+			boolean intact = condition >= 0.45F;
+
+			int sideX = alongX ? 0 : 1;
+			int sideZ = alongX ? 1 : 0;
+			boolean againstWall = isSolid(grid.get(x + sideX, y, z + sideZ)) || isSolid(grid.get(x - sideX, y, z - sideZ));
+			if (onFloor && againstWall) {
+				placeSupportPost(level, grid, cursor, x, y, z, maxY, intact);
+				return true;
+			}
+			if (intact && isSolid(grid.get(x, y + 1, z))) {
+				level.setBlock(cursor, Blocks.DARK_OAK_PLANKS.defaultBlockState(), FLAGS);
+				return true;
+			}
+			return false;
+		}
+		return false;
+	}
+
+	/** Rail along the trail centreline, missing in whole runs as well as single gaps. */
+	@Nullable
+	private RailShape railAt(RemainsSite site, int siteIndex, int trailIndex, int x, int y, int z) {
+		List<Blob> trail = site.trail();
+		if (trail.size() < 2) {
+			return null;
+		}
+		int from = Math.min(trailIndex, trail.size() - 2);
+		Blob a = trail.get(from);
+		Blob b = trail.get(from + 1);
+		double segX = b.x() - a.x();
+		double segZ = b.z() - a.z();
+		double lengthSq = segX * segX + segZ * segZ;
+		double px = x + 0.5 - a.x();
+		double pz = z + 0.5 - a.z();
+		double t = lengthSq > 0.0 ? Mth.clamp((px * segX + pz * segZ) / lengthSq, 0.0, 1.0) : 0.0;
+		double offX = px - segX * t;
+		double offZ = pz - segZ * t;
+		if (offX * offX + offZ * offZ > 0.36) {
+			return null;
+		}
+		if (posRand(trailIndex / 3, siteIndex, 1, SALT_REMAINS_RAIL) < 0.35F || posRand(x, y, z, SALT_REMAINS_RAIL) < 0.12F) {
+			return null;
+		}
+		return Math.abs(segX) >= Math.abs(segZ) ? RailShape.EAST_WEST : RailShape.NORTH_SOUTH;
+	}
+
+	/** Fence post wedged under a plank against the ceiling; snapped ones stop short. */
+	private void placeSupportPost(WorldGenLevel level, Grid grid, BlockPos.MutableBlockPos cursor, int x, int y, int z, int maxY, boolean intact) {
+		int ceiling = -1;
+		for (int k = 1; k <= 5; k++) {
+			if (grid.get(x, y + k, z) != CELL_AIR) {
+				ceiling = k;
+				break;
+			}
+		}
+		boolean snapped = !intact || ceiling < 2;
+		int height = snapped ? 1 + (posRand(x, y + 2, z, SALT_REMAINS_POST) < 0.5F ? 1 : 0) : ceiling;
+
+		for (int k = 0; k < height; k++) {
+			int by = y + k;
+			if (by > maxY) {
+				return;
+			}
+			cursor.set(x, by, z);
+			if (!level.getBlockState(cursor).isAir()) {
+				return;
+			}
+			boolean beam = !snapped && k == height - 1;
+			level.setBlock(cursor, beam ? Blocks.DARK_OAK_PLANKS.defaultBlockState() : Blocks.DARK_OAK_FENCE.defaultBlockState(), FLAGS);
+		}
+	}
+
+	private boolean touchesWallOrCeiling(WorldGenLevel level, Grid grid, BlockPos.MutableBlockPos probe, int x, int y, int z) {
+		if (isSupported(level, grid, probe, x, y, z, Direction.UP)) {
+			return true;
+		}
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			if (isSupported(level, grid, probe, x, y, z, direction)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Pot, candle and skull spread evenly around each camp room, a second pot beside one of the
+	 * trail's mine frames, plus the rare barrel at the end of an explorer tunnel. Each item has a
+	 * single target column, so only the chunk owning it ever places it.
+	 */
+	private void placeRemainsFeatures(WorldGenLevel level, BoundingBox chunkBox) {
+		List<RemainsSite> sites = this.layout.remains();
+		for (int i = 0; i < sites.size(); i++) {
+			RemainsSite site = sites.get(i);
+			RandomSource remains = RandomSource.create(this.seed ^ 0x4D1E5CA7L * (i + 1));
+
+			double baseAngle = remains.nextDouble() * Math.PI * 2.0;
+			Direction potFacing = Direction.Plane.HORIZONTAL.getRandomDirection(remains);
+			int candles = 1 + remains.nextInt(3);
+			boolean skull = remains.nextFloat() < 0.35F;
+			int skullRotation = remains.nextInt(16);
+			boolean trailPot = remains.nextFloat() < 0.6F;
+			Direction trailPotFacing = Direction.Plane.HORIZONTAL.getRandomDirection(remains);
+
+			BlockPos potStand = findOwnedStand(level, chunkBox, roomSpot(site, baseAngle, 0.6), 6);
+			if (potStand != null) {
+				placeRemainsPot(level, potStand, potFacing);
+			}
+
+			BlockPos candleStand = findOwnedStand(level, chunkBox, roomSpot(site, baseAngle + Math.PI * 2.0 / 3.0, 0.5), 6);
+			if (candleStand != null) {
+				level.setBlock(candleStand, Blocks.CANDLE.defaultBlockState().setValue(BlockStateProperties.CANDLES, candles), FLAGS);
+			}
+
+			if (skull) {
+				BlockPos skullStand = findOwnedStand(level, chunkBox, roomSpot(site, baseAngle + Math.PI * 4.0 / 3.0, 0.65), 6);
+				if (skullStand != null) {
+					level.setBlock(skullStand, Blocks.SKELETON_SKULL.defaultBlockState().setValue(BlockStateProperties.ROTATION_16, skullRotation), FLAGS);
+				}
+			}
+
+			if (trailPot) {
+				BlockPos spot = trailSpot(site, remains);
+				if (spot != null) {
+					BlockPos stand = findOwnedStand(level, chunkBox, spot, 4);
+					if (stand != null) {
+						placeRemainsPot(level, stand, trailPotFacing);
+					}
+				}
+			}
+		}
+
+		int tipIndex = this.layout.barrelTip();
+		if (tipIndex >= 0) {
+			TunnelTip tip = this.layout.tips().get(tipIndex);
+			BlockPos stand = findOwnedStand(level, chunkBox, BlockPos.containing(tip.x(), tip.y(), tip.z()), 3);
+			if (stand != null) {
+				BlockState barrel = Blocks.BARREL.defaultBlockState().setValue(BlockStateProperties.FACING, Direction.UP);
+				placeLootContainer(level, stand, barrel, LOST_MINER_BARREL_LOOT);
+			}
+		}
+	}
+
+	private static BlockPos roomSpot(RemainsSite site, double angle, double reach) {
+		double distance = site.radius() * reach;
+		return BlockPos.containing(site.x() + Math.cos(angle) * distance, site.y(), site.z() + Math.sin(angle) * distance);
+	}
+
+	/** One block past a mine frame and off the rail line, as if left leaning against the post. */
+	@Nullable
+	private static BlockPos trailSpot(RemainsSite site, RandomSource random) {
+		List<Blob> trail = site.trail();
+		List<Integer> supports = new ArrayList<>();
+		for (int k = 0; k < trail.size(); k++) {
+			if (site.isSupport(k)) {
+				supports.add(k);
+			}
+		}
+		int pick = random.nextInt(Math.max(1, supports.size()));
+		int side = random.nextBoolean() ? 1 : -1;
+		if (supports.isEmpty()) {
+			return null;
+		}
+		int k = supports.get(pick);
+		Blob blob = trail.get(k);
+		Blob next = trail.get(k + 1);
+		boolean alongX = Math.abs(next.x() - blob.x()) >= Math.abs(next.z() - blob.z());
+		int stepX = alongX ? (next.x() > blob.x() ? 1 : -1) : side;
+		int stepZ = alongX ? side : (next.z() > blob.z() ? 1 : -1);
+		return new BlockPos(Mth.floor(blob.x()) + stepX, Mth.floor(blob.y()), Mth.floor(blob.z()) + stepZ);
+	}
+
+	private void placeRemainsPot(WorldGenLevel level, BlockPos stand, Direction facing) {
+		BlockState pot = Blocks.DECORATED_POT.defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, facing);
+		placeLootContainer(level, stand, pot, REMAINS_POT_LOOT);
+	}
+
+	/** Searches only the spot's own column, nearest height first. */
+	@Nullable
+	private static BlockPos findOwnedStand(WorldGenLevel level, BoundingBox chunkBox, BlockPos spot, int reachY) {
+		if (spot.getX() < chunkBox.minX() || spot.getX() > chunkBox.maxX()
+				|| spot.getZ() < chunkBox.minZ() || spot.getZ() > chunkBox.maxZ()) {
+			return null;
+		}
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		for (int i = 0; i <= reachY * 2; i++) {
+			int dy = (i & 1) == 0 ? -(i >> 1) : (i + 1) >> 1;
+			cursor.set(spot.getX(), spot.getY() + dy, spot.getZ());
+			if (!canAccess(level, cursor) || !canAccess(level, cursor.below())) {
+				continue;
+			}
+			if (!level.getBlockState(cursor).isAir()) {
+				continue;
+			}
+			BlockPos floor = cursor.below();
+			if (level.getBlockState(floor).isFaceSturdy(level, floor, Direction.UP)) {
+				return cursor.immutable();
+			}
+		}
+		return null;
+	}
+
+	private void placeLootContainer(WorldGenLevel level, BlockPos pos, BlockState state, ResourceKey<LootTable> lootTable) {
+		level.setBlock(pos, state, FLAGS);
+		if (level.getBlockEntity(pos) instanceof RandomizableContainer container) {
+			container.setLootTable(lootTable, this.seed + pos.asLong());
 		}
 	}
 

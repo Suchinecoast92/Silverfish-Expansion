@@ -50,7 +50,7 @@ Ciclo de vida:
 - **Mirada curiosa**: giros de cabeza ocasionales.
 - **Trepar**: Araneo, Mantis y Crab trepan paredes como las arañas vanilla (siguen derechos; no se pegan al techo). El Fly y la larva no trepan.
 - **Agresión**: como el silverfish vanilla, atacan al jugador en cuanto lo ven. Si hieren a un adulto, los aliados cercanos se vuelven contra el atacante.
-- **Loot de nido**: solo los adultos **persistentes** (los de la cámara) pueden soltar restos de cueva en poca cantidad (slime, pepitas, carbón/redstone/cobre). Los salvajes y los eclosionados no, para no farmear.
+- **Drops por variante** (solo si los mata un jugador; Botín sube la probabilidad): Araneo → hilo 1–2 (40 %), Mantis → pedernal (30 %), Crab → bola de arcilla 1–2 (35 %), Fly → membrana de phantom (20 %). Las larvas solo dan EXP. Loot tables en `loot_table/entities/`.
 - **Fly**: vuelo local respecto al suelo/techo cercano (sin atravesar techos ni despegar en techos bajos). Si tiene objetivo, lo persigue en el aire con alcance de melee del silverfish vanilla + 10 %.
 
 ## Huevos
@@ -106,7 +106,21 @@ Piedra / deepslate dominante, con manchas raras y **bordes ruidosos** de:
 - liquen brillante (más denso en las salas/nodos), raíces colgantes, musgo pálido colgante
 - hongos, huevos irregulares, piedras infestadas maduras
 
-**Sin** agua (las zonas bajas son depresiones de grava/musgo), sin dripstone, sin cofres, sin spawners, sin loot artificial.
+**Sin** agua (las zonas bajas son depresiones de grava/musgo), sin dripstone, sin cofres, sin spawners.
+
+### Restos de un minero
+
+En 1–2 salas del nido queda el rastro de alguien que llegó antes que la colonia. Los restos siguen todo el **túnel de entrada** hasta la sala, no un solo rincón:
+
+- **marcos de mina** de roble oscuro cada ~7 bloques a lo largo del túnel (postes contra las paredes + dintel en el techo); unos enteros, otros partidos y otros derrumbados en tablones
+- una línea de **rieles** por el centro del túnel, con tramos enteros perdidos y huecos sueltos
+- **telarañas**, cobble y grava removida, algo más de grava sospechosa
+- en la sala, repartidos alrededor: una **vasija decorada**, una **vela apagada** y, a veces, un **cráneo de esqueleto**
+- a menudo una **segunda vasija** junto a uno de los marcos del túnel
+- loot escaso de minero en las vasijas (antorchas, carbón, pepitas, cobre, redstone, bolas de slime, pan, carne podrida…)
+- ~40 % de los nidos: un **barril del minero perdido** al final de un pasadizo exploratorio; raro: pico de hierro gastado, cubo, brújula, mapa o libro de Eficiencia/Irrompibilidad bajo. Nunca diamantes.
+
+Loot tables propias (solo ítems vanilla): `loot_table/chests/nest_remains_pot.json` y `lost_miner_barrel.json`.
 
 ### Fauna en la cámara
 

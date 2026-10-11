@@ -24,6 +24,7 @@ import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.InfestedBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -145,6 +146,13 @@ public class SilverfishLarvaEntity extends PathfinderMob implements GeoEntity {
 	@Override
 	public boolean isPushable() {
 		return !isBurrowing() && super.isPushable();
+	}
+
+	@Override
+	public void makeStuckInBlock(BlockState state, Vec3 motionMultiplier) {
+		if (!state.is(Blocks.COBWEB)) {
+			super.makeStuckInBlock(state, motionMultiplier);
+		}
 	}
 
 	/** Small stone crumbs around the larva while it digs in. */
