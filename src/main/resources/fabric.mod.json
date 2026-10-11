@@ -5,12 +5,8 @@
 	"name": "Silverfish Expansion",
 	"description": "Expande el ciclo de vida del silverfish: huevos, larvas y adultos que trepan en nidos subterráneos.",
 	"authors": [
-		"MOISES"
+		"Suchinecoast92"
 	],
-	"contact": {
-		"homepage": "https://github.com/Suchinecoast92/Silverfish-Expansion",
-		"sources": "https://github.com/Suchinecoast92/Silverfish-Expansion"
-	},
 	"license": "All-Rights-Reserved",
 	"icon": "assets/silverfish-expansion/icon.png",
 	"environment": "*",
